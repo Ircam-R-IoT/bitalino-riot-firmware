@@ -7,9 +7,9 @@ firmware of the BITalino R-IoT
 * Modify the `cc3200.ld` file and change the `HEAP_SIZE` value to `0x00008000` :
   * on Windows this file is located into `C:\Program Files(x86)\energia-0101E0017\hardware\cc3200\cores\cc3200`
   * on Mac OS, right-click on the Energia application and select "show package contents", then go to `Contents/Resources/Java/hardware/cc3200/cores/cc3200`
-* Get the SLFS library from [github.com/Ircam-R-IoT/SLFS](https://github.com/Ircam-R-IoT/SLFS) and drop it into `Documents/Energia/libraries`.
-* Get the BITalino Energia library from [github.com/Ircam-R-IoT/bitalino-energia-library](https://github.com/Ircam-R-IoT/bitalino-energia-library) and drop it into `Documents/Energia/libraries`.
-* Open the firmware.ino file with Energia and hit the "Verify" button in the upper left corner. If it builds, you're ready to upload it to the R-IoT board.
+* Get the SLFS library from [github.com/BITalinoWorld/firmware-bitalino-riot-SLFS](https://github.com/BITalinoWorld/firmware-bitalino-riot-SLFS) and drop it into `Documents/Energia/libraries`.
+* Get the BITalino Energia library from [github.com/BITalinoWorld/riot-energia-library](https://github.com/BITalinoWorld/riot-energia-library) and drop it into `Documents/Energia/libraries`.
+* Open the `bitalino-riot-firmware.ino` file with Energia and hit the "Verify" button in the upper left corner. If it builds, you're ready to upload it to the R-IoT board.
 
 #### going further
 
