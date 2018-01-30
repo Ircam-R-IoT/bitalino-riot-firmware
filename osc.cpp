@@ -208,3 +208,37 @@ void FloatToBigEndian(char *Dest, float *TheFloat)
 
 }
 
+
+// Skips to a single Int variable
+int OscSkipToValue(char *pBuf, int Index)
+{
+  if(!(Index%4))
+  {
+    Index++;
+  }
+  
+  // 4 byte padding / stuffing
+  while(Index%4)
+  {
+    Index++;
+  }	
+  // We should be at the comma
+  if(pBuf[Index] != ',')
+  {
+    Serial.println("OSC error missing ','");
+  }
+  Index++;  // Skips comma
+  Index++;  // Skip 'i'
+  if(!(Index%4))
+  {
+    Index++;
+  }
+  
+  // 4 byte padding / stuffing
+  while(Index%4)
+  {
+    Index++;
+  }
+  return(Index);
+}
+

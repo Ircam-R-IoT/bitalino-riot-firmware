@@ -16,7 +16,7 @@ const char HTML_HEADER_CSS_4[] = {"p {font-family:verdana;background-color:#F0ED
 const char HTML_HEADER_CSS_5[] = {"table {background-color:#F0EDE3;color:666666}\n</style></head>"};
 const char HTML_HEADER_CSS_6[] = {"<html><head><title>R-IoT CC3200 WiFi Sensor Platform</title>"};
 const char HTML_HEADER_CSS_7[] = {"<body>\n<h1><font color=\"#8BADFA\">{</font>SOUND MUSIC MOVEMENT<font color=\"#8BADFA\">}</font>"};
-const char HTML_HEADER_CSS_8[] = {"INTERACTION <br/> IRCAM - PLUX - 2016<span style=\"float:right;\">"};
+const char HTML_HEADER_CSS_8[] = {"INTERACTION <br/> IRCAM - PLUX - 2017<span style=\"float:right;\">"};
 
 #define HTML_HEADER_CSS_SIZE    9                             
 

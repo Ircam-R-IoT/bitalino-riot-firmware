@@ -1,5 +1,7 @@
-# BITalino R-IoT firmware v1.8
-firmware of the BITalino R-IoT
+# BITalino R-IoT firmware v2.03
+firmware of the BITalino R-IoT Hardware v2.0 (USB charging, USB serial port)
+
+
 
 #### quick start
 
