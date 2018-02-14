@@ -11,7 +11,6 @@
 #define LED_GREEN        8     // GPIO 7 
 #define LED_BLUE         27    // GPIO 8
 
-
 #define GPIO3    2             // GPIO + Analog Input
 #define GPIO4    6             // GPIO + Analog Input
 #define GPIO5    33            // GPIO + Analog Input
@@ -20,15 +19,19 @@
 #define GPIO11   10            // GPIO + PWM + I2C SDA
 #define GPIO23   32            // GPIO (JTAG TDI)
 #define GPIO24   38            // GPIO + PWM (JTAG TDO)
-#define GPIO28   19            // GPIO
-#define SWITCH_INPUT 19
+#define GPIO28   19            // GPIO (mode switch input)
+#define GPIO13   3             // GPIO (configured as general purpose input)
+#define GPIO12   4             // GPIO + Interrupt (configured as general purpose output)
+#define SWITCH_INPUT     19    // This is the mode switch (configuration / AP mode or normal usage as wifi station). Also exported in the OSC message
+#define SWITCH2_INPUT    3     //  Free to use on the side of the board, configured as an input with pullup in the FW and exported in the OSC message
+#define REMOTE_OUTPUT    4     //  Free to use on the side of the board, configured as an output in the FW and controlled by OSC message
 
 
 // DEFAULTS
 #define DEFAULT_UDP_PORT  8888
 #define DEFAULT_UDP_SERVICE_PORT  9999
 #define DEFAULT_SAMPLE_RATE  5
-#define VERSION_DATE        "R-IoT Bitalino v1.7 - IRCAM 2016"
+#define VERSION_DATE        "R-IoT Bitalino v2.03 - IRCAM-PLUX 2017-2018"
 #define PARAMS_FILENAME     "params.txt"
 #define WEB_SERVER_DELAY    100          // Time to press on the switch to start the webserver      
 

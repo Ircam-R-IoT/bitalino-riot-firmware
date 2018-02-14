@@ -1,13 +1,11 @@
-// LSM9DS0 Driver
-// Emmanuel FLETY - March 2014
-
-// ported to arduino and alike : march 2015
+// LSM9DS1 Driver
+// Emmanuel FLETY - March 2017
 
 #include <energia.h>
 #include <SPI.h>
 #include <Wire.h>
 #include "common.h"
-#include "LSM9DS0.h"
+#include "LSM9DS1.h"
 
 extern Word AccelerationX;
 extern Word AccelerationY;
@@ -22,72 +20,65 @@ extern Word MagnetometerZ;
 extern Word Temperature;
 extern byte CommunicationMode;
 
-void InitLSM9DS0(void)
-{	
-  if(CommunicationMode == SPI_MODE)
+
+unsigned char CheckWhoAmI(unsigned char Byte)
+{
+  switch(Byte)
   {
-    // Motion sensor I/Os
-    pinMode(ACC_CS, OUTPUT);
-    pinMode(GYR_CS, OUTPUT);
-    digitalWrite(ACC_CS, HIGH);
-    digitalWrite(GYR_CS, HIGH);
+	case WHO_AM_I_TOKEN:
+          return(1);
+
+	default:
+	  return(0);
   }
-  else
-  {
-    Wire.begin();
-  } 
-  delay(1);
+}
+
+
+void InitLSM9DS1(void)
+{	
+  
 		
   // We initialize the sensors (accel + gyro) in normal mode to get the proper
   // 16 bit resolution
-  // We use an ODR of 400 as we used to sample the motion sensor at 2ms (<=> 500 Hz)
+  // We use an ODR > 400 Hz as we used to sample the motion sensor at 2ms (<=> 500 Hz)
   // All axis X,Y,Z enabled
+  
+  // TODO : set sensitivity back to +- 8G, 2 gaus
   	
-  WriteAccLSM9DS0(CTRL_REG0_XM, 0b00000000);	// FIFO disable
-  WriteAccLSM9DS0(CTRL_REG1_XM, 0b10001111);	// ODR 400Hz - BDU enable - All axis ON
-  WriteAccLSM9DS0(CTRL_REG2_XM, 0b01011000);	// LP filter 194 Hz / +-8g / 4 wire SPI
-  //WriteAccLSM9DS0(CTRL_REG2_XM, 0b01000000);	// LP filter 194 Hz / +-2g / 4 wire SPI
-  WriteAccLSM9DS0(CTRL_REG3_XM, 0b00000000);	// Disable all interrupts on INT1
-  WriteAccLSM9DS0(CTRL_REG4_XM, 0b00000000);	// Disable all interrupts on INT2
-  WriteAccLSM9DS0(CTRL_REG5_XM, 0b11101100);	// Temp enable / Mag res high / 25 Hz mag rate
-  //WriteAccLSM9DS0(CTRL_REG6_XM, 0b00100000);	// Mag scale +-4 gauss
-  WriteAccLSM9DS0(CTRL_REG6_XM, 0b00000000);	// Mag scale +-2 gauss
-  //WriteAccLSM9DS0(CTRL_REG6_XM, 0b01100000);	// Mag scale +-12 gauss
-  WriteAccLSM9DS0(CTRL_REG7_XM, 0b00000000);	// HPF dis. / Cont. conversion for mag.
-  WriteAccLSM9DS0(FIFO_CTRL_REG_A, 0b00000000);	// FIFO disable, bypass mode
-	
-  // Gyro init
-  WriteGyrLSM9DS0(CTRL_REG1_G, 0b10111111);	// 380 Hz ODR + 100 Hz cut-off - normal mode
-  WriteGyrLSM9DS0(CTRL_REG2_G, 0b00000100);	// @ODR 380 Hz, 1.8Hz HPF
-  WriteGyrLSM9DS0(CTRL_REG3_G, 0b00000000);
-  WriteGyrLSM9DS0(CTRL_REG4_G, 0b10100000);	// 4 wire SPI, LSB first (big endian), 2000 °/s
-  //WriteGyrLSM9DS0(CTRL_REG4_G, 0b10000000);	// 4 wire SPI, LSB first (big endian), 245 °/s
-  WriteGyrLSM9DS0(CTRL_REG5_G, 0b00000000);	// HPF disabled, normal mode, FIFO disabled
+  // Gyroscope configuration
+  WriteAccLSM9DS1(CTRL_REG1_G, 0b10111000);   // 476 Hz ODR + 100 Hz cut-off / 2000°/s 
+  WriteAccLSM9DS1(CTRL_REG2_G, 0b00000000);   // HPF & LPF2 Filters bypassed
+  WriteAccLSM9DS1(CTRL_REG3_G, 0b00000000);
+  WriteAccLSM9DS1(CTRL_REG4_G, 0b00111000);   // Gyro axis enable
+  
+  // Accelerometer configuration
+  WriteAccLSM9DS1(CTRL_REG5_XL, 0b00111000);	// Accel axis enable
+  //WriteAccLSM9DS1(CTRL_REG6_XL, 0b00010000);	// ODR = Gyro ODR / +-4g / LP BW based on ODR = 211 Hz
+  WriteAccLSM9DS1(CTRL_REG6_XL, 0b00011000);	// ODR = Gyro ODR / +-8g / LP BW based on ODR = 211 Hz
+  WriteAccLSM9DS1(CTRL_REG8,    0b01000100);  // BDU on / 4-wire SPI / Auto INC
+  WriteAccLSM9DS1(CTRL_REG9,    0b00000100);  // SPI only / I2C disable        
+    
+  // Magneto configuration
+  WriteMagLSM9DS1(CTRL_REG1_M, 0b11010100);	// Temp comp. EN / Hi Perf / 20 Hz
+  WriteMagLSM9DS1(CTRL_REG2_M, 0b00000000);   // +- 4 gauss
+  WriteMagLSM9DS1(CTRL_REG3_M, 0b10000000);   // I2C dis. / SPI R+W / continuous output
+  WriteMagLSM9DS1(CTRL_REG4_M, 0b00001000);   // Z axis Hi Perf
+  WriteMagLSM9DS1(CTRL_REG5_M, 0b00000000);   // Block update BDU Off
 }
 
-void PowerDownLSM9DS0(void)
+
+void RebootLSM9DS1(void)
 {
-  WriteAccLSM9DS0(CTRL_REG1_XM, 0b00001111);	// ODR 0Hz = power down
-  WriteAccLSM9DS0(CTRL_REG7_XM, 0b00000011);	// Magnetic sensor power down
-  WriteGyrLSM9DS0(CTRL_REG1_G, 0b10110111);	// 380 Hz ODR + 100 Hz cut-off - Power down mode
+  WriteAccLSM9DS1(CTRL_REG8,0b01000101);      // BIT 0 = SOFT RESET
+  delay(10);	// wait reboot finished
 }
 
-
-void PowerUpLSM9DS0(void)
-{
-  WriteAccLSM9DS0(CTRL_REG1_XM, 0b10001111);	// ODR 400Hz - BDU enable - All axis ON
-  WriteAccLSM9DS0(CTRL_REG7_XM, 0b00000000);	// HPF dis. / Cont. conversion for mag.
-  WriteGyrLSM9DS0(CTRL_REG1_G, 0b10111111);	// 380 Hz ODR + 100 Hz cut-off - normal mode
-}
-
-
-
-void WriteAccLSM9DS0(unsigned char RegAddress, unsigned char Data)
+void WriteAccLSM9DS1(unsigned char RegAddress, unsigned char Data)
 {
   
   if(CommunicationMode == SPI_MODE)
   {
-    RegAddress = RegAddress & 0b00111111; // Write and MS bit = 0, no auto-increment
+    RegAddress = RegAddress & 0b01111111; // Write and MS bit = 0, no auto-increment
     // Asserting the chip
     digitalWrite(ACC_CS, LOW);		
     SPI.transfer(RegAddress);
@@ -96,7 +87,7 @@ void WriteAccLSM9DS0(unsigned char RegAddress, unsigned char Data)
   }
   else
   {
-    Wire.beginTransmission(LSM9DS0_ADDRESS_ACCELMAG);
+    Wire.beginTransmission(LSM9DS1_ADDRESS_ACCELGYRO);
     Wire.write(RegAddress);
     Wire.write(Data);
     Wire.endTransmission();
@@ -105,9 +96,9 @@ void WriteAccLSM9DS0(unsigned char RegAddress, unsigned char Data)
 
 
 // Single Byte read routine
-unsigned char ReadAccLSM9DS0(unsigned char RegAddress)
+unsigned char ReadAccLSM9DS1(unsigned char RegAddress)
 {
-  unsigned char DataLSM9DS0;
+  unsigned char DataLSM9DS1;
   
   if(CommunicationMode == SPI_MODE)
   {	
@@ -115,76 +106,74 @@ unsigned char ReadAccLSM9DS0(unsigned char RegAddress)
     // Asserting the chip
     digitalWrite(ACC_CS, LOW);
     SPI.transfer(RegAddress);
-    DataLSM9DS0 = SPI.transfer(0xFF); // dummy write
+    DataLSM9DS1 = SPI.transfer(0xFF); // dummy write
     digitalWrite(ACC_CS, HIGH);
   }
   else
   {
-    Wire.beginTransmission(LSM9DS0_ADDRESS_ACCELMAG);
+    Wire.beginTransmission(LSM9DS1_ADDRESS_MAG);
     Wire.write(RegAddress);
     Wire.endTransmission();
-    Wire.requestFrom(LSM9DS0_ADDRESS_ACCELMAG, 1);
+    Wire.requestFrom(LSM9DS1_ADDRESS_MAG, 1);
     // Wait around until enough data is available
     while (Wire.available() < 1);
-    DataLSM9DS0 = Wire.read();
+    DataLSM9DS1 = Wire.read();
     Wire.endTransmission();
   }
   
-  return(DataLSM9DS0);
+  return(DataLSM9DS1);
 }
 
 
-void WriteGyrLSM9DS0(unsigned char RegAddress, unsigned char Data)
+void WriteMagLSM9DS1(unsigned char RegAddress, unsigned char Data)
 {
   
   if(CommunicationMode == SPI_MODE)
   {
-    RegAddress = RegAddress & 0b00111111; // Write and MS bit = 0, no auto-increment
+    RegAddress = RegAddress & 0b01111111; // Write and MS bit = 0, no auto-increment
     // Asserting the chip
-    digitalWrite(GYR_CS, LOW);
+    digitalWrite(MAG_CS, LOW);
     SPI.transfer(RegAddress);
     SPI.transfer(Data);
-    digitalWrite(GYR_CS, HIGH);
+    digitalWrite(MAG_CS, HIGH);
   }
   else
   {
-    Wire.beginTransmission(LSM9DS0_ADDRESS_GYRO);
+    Wire.beginTransmission(LSM9DS1_ADDRESS_MAG);
     Wire.write(RegAddress);
     Wire.write(Data);
     Wire.endTransmission();
   }
-
-
 }
 
 
 // Single Byte read routine
-unsigned char ReadGyrLSM9DS0(unsigned char RegAddress)
+unsigned char ReadMagLSM9DS1(unsigned char RegAddress)
 {
-  unsigned char DataLSM9DS0;
+  unsigned char DataLSM9DS1;
   
   if(CommunicationMode == SPI_MODE)
   {
     RegAddress = RegAddress | 0b10000000; // Read bit =1 and MS bit = 0 (no auto-increment)
     // Asserting the chip
-    digitalWrite(GYR_CS, LOW);
+    digitalWrite(MAG_CS, LOW);
     SPI.transfer(RegAddress);
-    DataLSM9DS0 = SPI.transfer(0xFF); // dummy write
-    digitalWrite(GYR_CS, HIGH);
+    DataLSM9DS1 = SPI.transfer(0xFF); // dummy write
+    digitalWrite(MAG_CS, HIGH);
   }
   else
   {
-    Wire.beginTransmission(LSM9DS0_ADDRESS_GYRO);
+    Wire.beginTransmission(LSM9DS1_ADDRESS_MAG);
     Wire.write(RegAddress);
     Wire.endTransmission();
-    Wire.requestFrom(LSM9DS0_ADDRESS_GYRO, 1);
+    Wire.requestFrom(LSM9DS1_ADDRESS_MAG, 1);
     // Wait around until enough data is available
     while (Wire.available() < 1);
-    DataLSM9DS0 = Wire.read();
+    DataLSM9DS1 = Wire.read();
     Wire.endTransmission();
   }
   
-  return(DataLSM9DS0);
+  return(DataLSM9DS1);
 }
 
 
@@ -198,13 +187,19 @@ void ReadAccel(void)
     SPI.transfer(OUT_X_L_A | READ_AND_AUTOINCREMENT);
     LSB = SPI.transfer(0xFF);
     MSB = SPI.transfer(0xFF);
-    AccelerationX.Val[0] = LSB;
-    AccelerationX.Val[1] = MSB;
+    
+    // We swap X and Y based on the new chip (LS1) vs. the former one (LS0)
+    // and chip orientation on PCB. 
+    // In addition, axis orientation is inverted
+    // Could use a axis order swapper + Sign
+    // Orientation of the chip is 3x mom. switches / led down, power switch / antenna up
+    AccelerationY.Val[0] = LSB;
+    AccelerationY.Val[1] = MSB;
 	
     LSB = SPI.transfer(0xFF);
     MSB = SPI.transfer(0xFF);
-    AccelerationY.Val[0] = LSB;
-    AccelerationY.Val[1] = MSB;
+    AccelerationX.Val[0] = LSB;
+    AccelerationX.Val[1] = MSB;
 	
     LSB = SPI.transfer(0xFF);
     MSB = SPI.transfer(0xFF);
@@ -214,21 +209,23 @@ void ReadAccel(void)
   }
   else
   {
-    Wire.beginTransmission(LSM9DS0_ADDRESS_ACCELMAG);
+    Wire.beginTransmission(LSM9DS1_ADDRESS_ACCELGYRO);
     Wire.write(OUT_X_L_A | JUST_READ);
     Wire.endTransmission();
-    Wire.requestFrom(LSM9DS0_ADDRESS_ACCELMAG, 6);
+    Wire.requestFrom(LSM9DS1_ADDRESS_ACCELGYRO, 6);
     // Wait around until enough data is available
     while (Wire.available() < 6);
     LSB = Wire.read();
     MSB = Wire.read();
-    AccelerationX.Val[0] = LSB;
-    AccelerationX.Val[1] = MSB;
+    AccelerationY.Val[0] = LSB;
+    AccelerationY.Val[1] = MSB;
+    
 	
     LSB = Wire.read();
     MSB = Wire.read();
-    AccelerationY.Val[0] = LSB;
-    AccelerationY.Val[1] = MSB;
+    AccelerationX.Val[0] = LSB;
+    AccelerationX.Val[1] = MSB;
+    
 	
     LSB = Wire.read();
     MSB = Wire.read();
@@ -236,6 +233,9 @@ void ReadAccel(void)
     AccelerationZ.Val[1] = MSB;	
     Wire.endTransmission();
   }
+  // Sign
+  AccelerationX.Value = -AccelerationX.Value;
+  AccelerationY.Value = -AccelerationY.Value;
 }
 
 
@@ -246,41 +246,43 @@ void ReadGyro(void)
   if(CommunicationMode == SPI_MODE)
   {
     // Asserting the chip
-    digitalWrite(GYR_CS, LOW);
+    digitalWrite(ACC_CS, LOW);
     SPI.transfer(OUT_X_L_G | READ_AND_AUTOINCREMENT);
     LSB = SPI.transfer(0xFF);
     MSB = SPI.transfer(0xFF);
-    GyroscopeX.Val[0] = LSB;
-    GyroscopeX.Val[1] = MSB;	
+    GyroscopeY.Val[0] = LSB;
+    GyroscopeY.Val[1] = MSB;	
 	
     LSB = SPI.transfer(0xFF);
     MSB = SPI.transfer(0xFF);
-    GyroscopeY.Val[0] = LSB;
-    GyroscopeY.Val[1] = MSB;
+    GyroscopeX.Val[0] = LSB;
+    GyroscopeX.Val[1] = MSB;
   	
     LSB = SPI.transfer(0xFF);
     MSB = SPI.transfer(0xFF);
     GyroscopeZ.Val[0] = LSB;
     GyroscopeZ.Val[1] = MSB;
-    digitalWrite(GYR_CS, HIGH);
+    digitalWrite(ACC_CS, HIGH);
   }
   else
   {
-    Wire.beginTransmission(LSM9DS0_ADDRESS_GYRO);
+    Wire.beginTransmission(LSM9DS1_ADDRESS_ACCELGYRO);
     Wire.write(OUT_X_L_G | JUST_READ);
     Wire.endTransmission();
-    Wire.requestFrom(LSM9DS0_ADDRESS_GYRO, 6);
+    Wire.requestFrom(LSM9DS1_ADDRESS_ACCELGYRO, 6);
     // Wait around until enough data is available
     while (Wire.available() < 6);
     LSB = Wire.read();
     MSB = Wire.read();
-    GyroscopeX.Val[0] = LSB;
-    GyroscopeX.Val[1] = MSB;	
+    GyroscopeY.Val[0] = LSB;
+    GyroscopeY.Val[1] = MSB;
+  	
 	
     LSB = Wire.read();
     MSB = Wire.read();
-    GyroscopeY.Val[0] = LSB;
-    GyroscopeY.Val[1] = MSB;
+    GyroscopeX.Val[0] = LSB;
+    GyroscopeX.Val[1] = MSB;
+    
   	
     LSB = Wire.read();
     MSB = Wire.read();
@@ -288,8 +290,11 @@ void ReadGyro(void)
     GyroscopeZ.Val[1] = MSB;
     Wire.endTransmission();
   }
+  
+  // Sign
+  GyroscopeY.Value = -GyroscopeY.Value;
+  GyroscopeX.Value = -GyroscopeX.Value;
 }
-
 
 
 void ReadMagneto(void)
@@ -299,41 +304,43 @@ void ReadMagneto(void)
   if(CommunicationMode == SPI_MODE)
   {
     // Asserting the chip
-    digitalWrite(ACC_CS, LOW);
-    SPI.transfer(OUT_X_L_M | READ_AND_AUTOINCREMENT);
-    LSB = SPI.transfer(0xFF);
-    MSB = SPI.transfer(0xFF);
-    MagnetometerX.Val[0] = LSB;
-    MagnetometerX.Val[1] = MSB;
-    	
+    digitalWrite(MAG_CS, LOW);
+    SPI.transfer(OUT_X_L_M | MAG_READ_AND_AUTOINCREMENT);
     LSB = SPI.transfer(0xFF);
     MSB = SPI.transfer(0xFF);
     MagnetometerY.Val[0] = LSB;
     MagnetometerY.Val[1] = MSB;
     
+    	
+    LSB = SPI.transfer(0xFF);
+    MSB = SPI.transfer(0xFF);
+    MagnetometerX.Val[0] = LSB;
+    MagnetometerX.Val[1] = MSB;
+    
+    
     LSB = SPI.transfer(0xFF);
     MSB = SPI.transfer(0xFF);
     MagnetometerZ.Val[0] = LSB;
     MagnetometerZ.Val[1] = MSB;	
-    digitalWrite(ACC_CS, HIGH);
+    digitalWrite(MAG_CS, HIGH);
   }
   else
   {
-    Wire.beginTransmission(LSM9DS0_ADDRESS_ACCELMAG);
+    Wire.beginTransmission(LSM9DS1_ADDRESS_ACCELGYRO);
     Wire.write(OUT_X_L_M | JUST_READ);
     Wire.endTransmission();
-    Wire.requestFrom(LSM9DS0_ADDRESS_ACCELMAG, 6);
+    Wire.requestFrom(LSM9DS1_ADDRESS_ACCELGYRO, 6);
     // Wait around until enough data is available
     while (Wire.available() < 6);
     LSB = Wire.read();
     MSB = Wire.read();
-    MagnetometerX.Val[0] = LSB;
-    MagnetometerX.Val[1] = MSB;	
-	
-    LSB = Wire.read();
-    MSB = Wire.read();
     MagnetometerY.Val[0] = LSB;
     MagnetometerY.Val[1] = MSB;
+   
+    LSB = Wire.read();
+    MSB = Wire.read();
+    MagnetometerX.Val[0] = LSB;
+    MagnetometerX.Val[1] = MSB;
   	
     LSB = Wire.read();
     MSB = Wire.read();
@@ -341,6 +348,10 @@ void ReadMagneto(void)
     MagnetometerZ.Val[1] = MSB;
     Wire.endTransmission();
   }
+  // Sign
+  MagnetometerX.Value = -MagnetometerX.Value;
+  MagnetometerZ.Value = -MagnetometerZ.Value;
+  
 }
 
 void ReadTemperature(void)
@@ -352,7 +363,7 @@ void ReadTemperature(void)
   {
     // Asserting the chip
     digitalWrite(ACC_CS, LOW);
-    SPI.transfer(OUT_TEMP_L_XM | READ_AND_AUTOINCREMENT);
+    SPI.transfer(OUT_TEMP_L | READ_AND_AUTOINCREMENT);
     LSB = SPI.transfer(0xFF);
     MSB = SPI.transfer(0xFF);
     Temperature.Val[0] = LSB;
@@ -361,17 +372,16 @@ void ReadTemperature(void)
   }
   else
   {
-    Wire.beginTransmission(LSM9DS0_ADDRESS_ACCELMAG);
-    Wire.write(OUT_TEMP_L_XM | JUST_READ);
+    Wire.beginTransmission(LSM9DS1_ADDRESS_MAG);
+    Wire.write(OUT_TEMP_L | JUST_READ);
     Wire.endTransmission();
-    Wire.requestFrom(LSM9DS0_ADDRESS_ACCELMAG, 2);
+    Wire.requestFrom(LSM9DS1_ADDRESS_MAG, 2);
     // Wait around until enough data is available
     while (Wire.available() < 2);
     LSB = Wire.read();
     MSB = Wire.read();
     Temperature.Val[0] = LSB;
     Temperature.Val[1] = MSB;	
-    
     Wire.endTransmission();
   }
 }

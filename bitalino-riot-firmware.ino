@@ -5,6 +5,9 @@
  IRCAM - Emmanuel FLETY - Music Bricks - Rapid Mix
  
  Rev History :
+ 
+ 2.0 : moving to the LSM9DS1 motion sensor, new PCB from PLUX and secondary UART. UART0 : FTDI / UART1 : Bitalino
+ 
  1.7 : Massive improvement in calibration and Euler angles - added bitalino support in this specific version
  
  1.5 : adding a AP style connection to allow streaming to multiple computers / devices
@@ -22,13 +25,13 @@
 #include <WiFiServer.h>
 #include <WiFiUdp.h>
 #include <Wire.h>
-#include <bitalino.h>
+#include <bitalino1.h>
 
 // Handles the file system of the FLASH, to store parameters
 #include <SLFS.h>
 
 #include "common.h"
-#include "LSM9DS0.h"
+#include "LSM9DS1.h"
 #include "osc.h"
 #include "web.h"
 
@@ -73,7 +76,8 @@ int PacketStatus;
 boolean ConfigurationMode = false;
 boolean AcceptOSC = true;
 byte PageToDisplay = CONFIG_WEB_PAGE;
-unsigned int ConfigModeCounter = 0;
+unsigned int ConfigModePressCounter = 0;
+unsigned int ConfigModeAllowCounter = 1000; // allow config only shortly after start-up
 int TempInt = 0;
 boolean BlinkStatus = 0;
 
@@ -98,6 +102,9 @@ unsigned long ElapsedTime2 = 0;
 ////////////////////////////////////////////////////////////
 // Sensor storage
 short unsigned int SwitchState, ActualSwitchState;
+short unsigned int SwitchState2, ActualSwitchState2;
+short unsigned int RemoteOutputState = LOW;
+
 Word AccelerationX, AccelerationY, AccelerationZ;
 Word GyroscopeX, GyroscopeY, GyroscopeZ;
 Word MagnetometerX, MagnetometerY, MagnetometerZ;
@@ -197,11 +204,25 @@ void setup() {
   // SWITCH_INPUT can be used in place of GPIO28, see common.h for I/0 definitions
   pinMode(GPIO28, INPUT_PULLUP);  // Used to trigger configuration mode
   
+  // This is an addition GPIO configured as an input and exported in the OSC message
+  // SWITCH2_INPUT can be used in place of GPIO13, see common.h for I/0 definitions
+  pinMode(GPIO13, INPUT_PULLUP);
+  
+  // This is an addition GPIO configured as an input and exported in the OSC message
+  // REMOTE_OUTPUT can be used in place of GPIO12, see common.h for I/0 definitions
+  pinMode(GPIO12, OUTPUT);
+  digitalWrite(REMOTE_OUTPUT, RemoteOutputState);
+  
     // POWER On indicator  
   SetLedColor(1,0,0);  // RED
   
-  //Initialize serial
+  //Initialize serial. Serial1 is for the bitalino board
   Serial.begin(115200);
+  Serial1.begin(115200);
+  
+  // Needed to have printf working
+  stdout = fopencookie((void *)0, "w", myVectors);
+  setlinebuf(stdout);
   
   // Starts the file system
   // This has to be done asap to determine if we are in bitalino mode or 
@@ -212,7 +233,7 @@ void setup() {
   LoadParams();
  
   // Bitalino framework init attempt
-   if(!StandAloneMode)
+  if(!StandAloneMode)
   {
     char verStr[30];
     boolean ok;
@@ -235,6 +256,8 @@ void setup() {
     }
     else
     {
+      StandAloneMode = false;  // Not absolutely needed but safety
+      Serial.println("Bitalino found, initializing at 1000 Hz");
       ok = BITalino.battery(10);  // set battery threshold (optional)
       ok = BITalino.start(1000, 0x3F, false);   // start acquisition of all channels at 1000 Hz
       sprintf(StringBuffer, "/%u/bitalino\0",ModuleID);
@@ -243,20 +266,12 @@ void setup() {
     
   }
   
-  if(StandAloneMode)
-  {
-    Serial.println(VERSION_DATE);
-    Serial.println("Params Loaded");
-  }
-  
-
-  // Needed to have printf working
-  stdout = fopencookie((void *)0, "w", myVectors);
-  setlinebuf(stdout);
+  Serial.println(VERSION_DATE);
+  Serial.println("Params Loaded");
 
   // Check if we are going in configuration mode
   // 2-3 second shorting the pin to ground during boot
-  while(!digitalRead(GPIO28))
+  while(!digitalRead(SWITCH_INPUT))
   {
     delay(20);
     TempInt++;
@@ -273,18 +288,14 @@ void setup() {
     if(TempInt > WEB_SERVER_DELAY)
     {
       ConfigurationMode = true;
-      if(StandAloneMode)
-      {
-        Serial.println("Configuration / Web Server Mode");
-      }
+      Serial.println("Configuration / Web Server Mode");
       SetLedColor(1,0,0);  // RED
       break;
     }
   }
 
   // Init motion sensor
-  if(StandAloneMode)
-    Serial.println("Init Motion Sensor");
+  Serial.println("Init Motion Sensor");
   
   // Start SPI with defaults
   SPI.begin();
@@ -292,7 +303,38 @@ void setup() {
   // 16 MHz max bit rate, clock divider 1:2 => 8 MHZ SPI clock
   SPI.setClockDivider(SPI_CLOCK_DIV2);
   SPI.setDataMode(SPI_MODE0);
-  InitLSM9DS0();
+  
+  // Sensor HW comm settings
+  if(CommunicationMode == SPI_MODE)
+  {
+    // Motion sensor I/Os
+    pinMode(ACC_CS, OUTPUT);
+    pinMode(MAG_CS, OUTPUT);
+    digitalWrite(ACC_CS, HIGH);
+    digitalWrite(MAG_CS, HIGH);
+  }
+  else
+  {
+    Wire.begin();
+  } 
+  
+  delay(10);
+  RebootLSM9DS1();
+  delay(10);
+  
+  //////////////////////////////////////////
+  //// TEMP / DEBUG
+  
+  /*unsigned char SensorToken;
+  while(1)
+  {
+    SensorToken = ReadAccLSM9DS1(WHO_AM_I);
+    Serial.print("WhoAmI: 0x");
+    Serial.println(SensorToken, HEX);
+    delay(100);
+  }
+ */
+  InitLSM9DS1();
 
   delay(40);
   SetLedColor(0,1,0);
@@ -321,23 +363,17 @@ void setup() {
     if(APorStation == STATION_MODE)
     {
       // Attempt to connect to Wifi network:
-      if(StandAloneMode)
-      {
-        Serial.print("R-IoT connecting to: ");
-        // print the network name (SSID);
-        Serial.println(ssid); 
-      }
+      Serial.print("R-IoT connecting to: ");
+      // print the network name (SSID);
+      Serial.println(ssid); 
       Connect(); 
     }
     else  // AP mode
     {
       // attempt to connect to Wifi network:
-      if(StandAloneMode)
-      {
-        Serial.print("R-IoT creates network: ");
-        // print the network name (SSID);
-        Serial.println(ssid); 
-      }
+      Serial.print("R-IoT creates network: ");
+      // print the network name (SSID);
+      Serial.println(ssid); 
       
       // Creates the AP & config
       APIP = IPAddress(TheGatewayIP);
@@ -361,7 +397,7 @@ void setup() {
     // Prepare the OSC message structure   
     // Now we send all data at once in a single message with only floats
     sprintf(StringBuffer, "/%u/raw\0",ModuleID);
-    PrepareOSC(&RawSensors, StringBuffer, 'f', 21);    // All float
+    PrepareOSC(&RawSensors, StringBuffer, 'f', 22);    // All float
     
   } // END OF IF NORMAL (!CONFIG) MODE
 
@@ -384,9 +420,8 @@ void setup() {
   }
 
   ElapsedTime = millis();
-  ElapsedTime2 = millis();
+  ElapsedTime2 = millis();  
 }
-
 
 
 void loop() {
@@ -402,8 +437,7 @@ void loop() {
         if(CurrentStatus != WL_CONNECTED)
         {
           // print dots while we wait to connect and blink the power led
-          if(StandAloneMode)
-            Serial.print(".");
+          Serial.print(".");
           
           if(BlinkStatus)
           {
@@ -422,30 +456,25 @@ void loop() {
         {
           status = WiFi.status();
           SetLedColor(0,0,1); // Blue
-          if(StandAloneMode)
-            Serial.println("\nConnected to the network");  
+          Serial.println("\nConnected to the network");  
 
           while ((WiFi.localIP() == INADDR_NONE))
           {
             // print dots while we wait for an ip addresss
-            if(StandAloneMode)
-              Serial.print(".");
+            Serial.print(".");
             delay(300);  
           }
-          
-          if(StandAloneMode)
-          {
-            // you're connected now, so print out the status  
-            printCurrentNet();
-            printWifiData();
-          }
+           
+          // you're connected now, so print out the status  
+          printCurrentNet();
+          printWifiData();
+
         }
         
         // Disconnected from the network, try to reconnect
         if((status == WL_CONNECTED) && (WiFi.status() != WL_CONNECTED))
         {
-          if(StandAloneMode)
-            Serial.println("Network Lost, trying to reconnect");
+          Serial.println("Network Lost, trying to reconnect");
           status = WiFi.status();
         }
       } // End of Station mode connection
@@ -472,17 +501,103 @@ void loop() {
         {
           statusAP = true;
           SetLedColor(0,0,1);
-          if(StandAloneMode)
-          {
-            Serial.println("AP active.");
-            printCurrentNet();
-            printWifiData();
-          }
+      
+          Serial.println("AP active.");
+          printCurrentNet();
+          printWifiData();
         }
       } // End of AP mode connection
     } // end of IF(elapsed time)
 
+    if(AcceptOSC)
+    {
+      // Parses incoming OSC messages
+      int packetSize = ConfigPacket.parsePacket();
+      if (packetSize)
+      {
+        // Debug Info
+         //Serial.print("Received packet of size ");
+         //Serial.println(packetSize);
+         //Serial.print("From ");
+         //IPAddress remoteIp = ConfigPacket.remoteIP();
+         //Serial.print(remoteIp);
+         //Serial.print(", port ");
+         //Serial.println(ConfigPacket.remotePort());
 
+        // read the packet into packetBufffer
+        int Index = 0;
+        int len = ConfigPacket.read(packetBuffer, 255);
+        if (len > 0) packetBuffer[len] = 0;          // Add a terminator in the buffer
+        
+        //Debug
+        /*Serial.println("Contents:");
+        Serial.println(packetBuffer);
+        Serial.println("Packet Len:");
+        Serial.println(len);
+        for (int i=0 ; i < len ; i++)
+        {
+          if(packetBuffer[i] == '\0')
+            printf("_");
+          else
+            printf("%c",packetBuffer[i]);
+        }
+        printf("\n");
+        
+        printf("Generated Osc Message:\n");
+        for (int i=0 ; i < len ; i++)
+        {
+          if(Message.buf[i] == '\0')
+            printf("_");
+          else
+            printf("%c",Message.buf[i]);
+        }
+        printf("\n");*/
+        
+        // Actual parsing
+        // Checks that's for the proper ID / module
+        sprintf(StringBuffer, "/%u/\0",ModuleID);
+        if(!strncmp(packetBuffer, StringBuffer, strlen(StringBuffer)))
+        {  // that's for us
+          char *pUDP = packetBuffer;
+          int Index = strlen(StringBuffer);  // Skips the ID
+         
+         // Parsing / decoding (basic)
+          if(!strncmp(&(pUDP[Index]), "output", 6))
+          {
+            Index += strlen("output");
+            Index = OscSkipToValue(pUDP, Index);
+            
+            //Serial.println("After OSC SKIP");
+            //printf("Index = %d\n", Index);
+            
+            int OscRemoteValue, TempInt;
+            TempInt = pUDP[Index];
+            OscRemoteValue = TempInt << 24;
+            Index++;
+            TempInt = pUDP[Index];
+            OscRemoteValue += OscRemoteValue || (TempInt << 16);
+            Index++;
+            TempInt = pUDP[Index];
+            OscRemoteValue += OscRemoteValue || (TempInt << 8);
+            Index++;
+            TempInt = pUDP[Index];
+            OscRemoteValue += OscRemoteValue || TempInt;
+           
+           RemoteOutputState = OscRemoteValue;
+            if(RemoteOutputState)
+              RemoteOutputState = HIGH;
+            else
+              RemoteOutputState = LOW;
+            // Debug
+            printf("Remote Control Output update = %d\n", RemoteOutputState);
+            digitalWrite(REMOTE_OUTPUT,RemoteOutputState);
+          }
+          // add here other keywords like changing the sample rate and saving 
+          // data => see parse serial
+        }
+      }
+    }
+    
     // The main sampling loop
     if((millis() - ElapsedTime >= SampleRate) && !ConfigurationMode &&
     (((WiFi.status()==WL_CONNECTED) && (APorStation==STATION_MODE)) ||
@@ -493,6 +608,11 @@ void loop() {
       
       SwitchState = digitalRead(SWITCH_INPUT);
       ActualSwitchState = !SwitchState;
+      
+      // Second input reading
+      SwitchState2 = digitalRead(SWITCH2_INPUT);
+      ActualSwitchState2 = !SwitchState2;
+      
       // Debug
       ReadAccel();
       ReadGyro();
@@ -503,20 +623,26 @@ void loop() {
       AnalogInput1 = analogRead(GPIO4);
       AnalogInput2 = analogRead(GPIO5);
       
-      
-      if(!SwitchState)
-      { 
-        ConfigModeCounter++;
-        if(ConfigModeCounter > 600)
+      // Allow configuration mode only shortly after start-up
+      if(ConfigModeAllowCounter > 0)
+      {
+        --ConfigModeAllowCounter;
+        if(!SwitchState)
         {
-          ConfigModeCounter = 0;
-          CalibrateAccGyroMag();
+          ConfigModePressCounter++;
+          if(ConfigModePressCounter > 600)
+          {
+            ConfigModeAllowCounter = 0;
+            ConfigModePressCounter = 0;
+            CalibrateAccGyroMag();
+          }
         }
-      }
-      else
-        ConfigModeCounter = 0;
-
-      
+        else
+        {
+          // end of initial period that allows for calibration
+          ConfigModePressCounter = 0;
+        }
+      }      
       if((millis() - gyroOffsetCalElapsed > gyroOffsetAutocalTime) && gyroOffsetCalDone)
       {
         gyroOffsetCalElapsed = millis();
@@ -553,8 +679,10 @@ void loop() {
       // correction against angles, the "real" sensor orientation and pitch / roll proper 
       // signing must be used. We therefore do a double signe inversion when the sensor 
       // is on the bottom. [looks crappy but works and for good reasons]
-    
-      MadgwickAHRSupdate(a_x, a_y, a_z, g_x*PI/180.0f, g_y*PI/180.0f, g_z*PI/180.0f, m_x, m_y, -m_z);   
+      
+      // Different orientation of the LS1 vs LS0 for the magnetometers
+      MadgwickAHRSupdate(a_x, a_y, a_z, g_x*PI/180.0f, g_y*PI/180.0f, g_z*PI/180.0f, m_x, m_y, -m_z);
+      //MadgwickAHRSupdate(a_x, a_y, a_z, g_x*PI/180.0f, g_y*PI/180.0f, g_z*PI/180.0f, m_x, m_y, m_z);
       yaw   = atan2(2.0f * (q2 * q3 + q1 * q4), q1*q1 + q2*q2 - q3*q3 - q4*q4);   
       pitch = -asin(2.0f * ((q2*q4) - (q1*q3)));
       roll  = atan2(2.0f * (q1*q2 + q3*q4), (q1*q1) - (q2*q2) - (q3*q3) + (q4*q4));
@@ -602,10 +730,16 @@ void loop() {
       pData += sizeof(float);
       // Temperature
       TempFloat = (float)Temperature.Value;
+      // Conversion to decimal °C here before float export
+      TempFloat = (TempFloat / (float)(LSM_TEMP_SCALE)) + (float)(LSM_BIAS_TEMPERATURE);
       FloatToBigEndian(pData, &TempFloat);
       pData += sizeof(float);
       
       TempFloat = (float)ActualSwitchState;
+      FloatToBigEndian(pData, &TempFloat);
+      pData += sizeof(float);
+      
+      TempFloat = (float)ActualSwitchState2;
       FloatToBigEndian(pData, &TempFloat);
       pData += sizeof(float);
     
@@ -635,7 +769,6 @@ void loop() {
       FloatToBigEndian(pData, &roll);
       pData += sizeof(float);
       FloatToBigEndian(pData, &heading);
-      
       
       UdpPacket.write((uint8_t*)RawSensors.buf, RawSensors.PacketSize);
       UdpPacket.endPacket(); 
@@ -670,23 +803,21 @@ void loop() {
       SetLedColor(0,0,0);     
     }
     
-    // Process the bitalino serial stream if not in standalone mode
-    // otherwise accept serial commands for real time configuration
+    // Process the bitalino serial stream separately from the first UART
     if(Serial.available())
     {
        //////////////////////////////////////////////////////////////////////////////////
       // Incoming serial message (config, control)
-      if(StandAloneMode)
+     if(GrabSerialMessage())
       {
-        if(GrabSerialMessage())
-        {
-          ProcessSerial();
-          FlagSerial = false;
-        }
+        ProcessSerial();
+        FlagSerial = false;
       }
-      else
-        FrameAmount = BITalino.readSingle(&frame);
-    }  
+    }
+    if(Serial1.available())
+    {
+      FrameAmount = BITalino.readSingle(&frame);
+    }
   }
   //////////////////////////////////////////////////////////////////////////////////
   // Handles the web server for configuration via the webpage
@@ -717,16 +848,13 @@ void loop() {
     else if (!statusAP) {
       statusAP = true;
       SetLedColor(0,0,1);
-      if(StandAloneMode)
-      {
-        Serial.println("AP active.");
-        printCurrentNet();
-        printWifiData();
-        Serial.println("Starting webserver on port 80");
-      }
+      Serial.println("AP active.");
+      printCurrentNet();
+      printWifiData();
+      Serial.println("Starting webserver on port 80");
+
       server.begin();
-      if(StandAloneMode)
-        Serial.println("Webserver started!");
+      Serial.println("Webserver started!");
     }
 
     if(statusAP) // We can accept clients
@@ -782,11 +910,8 @@ void loop() {
                   {
                     Index = SkipToValue(StringBuffer);
                     strcpy(ssid, &(StringBuffer[Index]));
-                    if(StandAloneMode)
-                    {
-                      Serial.print("Updated SSID: ");
-                      Serial.println(ssid);
-                    }
+                    Serial.print("Updated SSID: ");
+                    Serial.println(ssid);
                   }
                   
                   if(!strncmp("pass", StringBuffer, 4))
@@ -794,11 +919,8 @@ void loop() {
                     Index = SkipToValue(StringBuffer);
                     
                     strcpy(password, &(StringBuffer[Index]));
-                    if(StandAloneMode)
-                    {
-                      Serial.print("Updated password: ");
-                      Serial.println(password);
-                    }
+                    Serial.print("Updated password: ");
+                    Serial.println(password);
                   }
                   
                   if(!strncmp("security", StringBuffer, 8))
@@ -808,12 +930,9 @@ void loop() {
                       UseSecurity = true;
                     else
                       UseSecurity = false;
-                    
-                    if(StandAloneMode)
-                    {
-                      Serial.print("Updated Security: ");
-                      Serial.println(UseSecurity);
-                    }
+ 
+                    Serial.print("Updated Security: ");
+                    Serial.println(UseSecurity);
                   }
                   
                   if(!strncmp("mode", StringBuffer, 4))
@@ -823,12 +942,10 @@ void loop() {
                       APorStation = STATION_MODE;
                     else
                       APorStation = AP_MODE;
+
+                    Serial.print("Updated Mode: ");
+                    Serial.println(APorStation);
                     
-                    if(StandAloneMode)
-                    {
-                      Serial.print("Updated Mode: ");
-                      Serial.println(APorStation);
-                    }
                   }
                   
                   if(!strncmp("type", StringBuffer, 4))
@@ -837,13 +954,11 @@ void loop() {
                     if(!strncmp(&(StringBuffer[Index]), "static", 6))
                       UseDHCP = false;
                     else
-                      UseDHCP = true;
-                      
-                    if(StandAloneMode)
-                    {
-                      Serial.print("Updated DHCP: ");
-                      Serial.println(UseDHCP);
-                    }
+                      UseDHCP = true; 
+                    
+                    Serial.print("Updated DHCP: ");
+                    Serial.println(UseDHCP);
+                    
                   }
 
                   if(!strncmp("ip", StringBuffer, 2))
@@ -894,8 +1009,7 @@ void loop() {
                 } // End of WHILE(PARSING PARAMETERS)
                 // Save Params
                 SaveFlashPrefs();
-                if(StandAloneMode)
-                  Serial.println("Params updated and saved");
+                Serial.println("Params updated and saved");
                 PageToDisplay = PARAMS_WEB_PAGE;
 
               }
@@ -907,8 +1021,7 @@ void loop() {
             // so you can send a reply
             if (c == '\n' && currentLineIsBlank) 
             {
-              if(StandAloneMode)
-                Serial.println("sending webpage");
+              Serial.println("sending webpage");
               // send a standard http response header
               switch(PageToDisplay)
               {
@@ -951,8 +1064,7 @@ void loop() {
 
         // close the connection:
         client.stop();
-        if(StandAloneMode)
-          Serial.println("client disconnected");
+        Serial.println("client disconnected");
       } 
     }
   }
@@ -1225,8 +1337,7 @@ void MadgwickAHRSupdate(float ax, float ay, float az, float gx, float gy, float 
 
 	// Use IMU algorithm if magnetometer measurement invalid (avoids NaN in magnetometer normalisation)
 	if((mx == 0.0f) && (my == 0.0f) && (mz == 0.0f)) {
-          if(StandAloneMode)
-	    Serial.println("Mag data invalid - no update");
+          Serial.println("Mag data invalid - no update");
 	  return;
 	}
 
@@ -1422,23 +1533,19 @@ void magOffsetCalibration(void)
     } 
   }
   while(!digitalRead(SWITCH_INPUT))  delay(20);
-  if(StandAloneMode)
-  {
-    Serial.println("Mag got recalibrated");
-    Serial.print("offsets: ");
-  }
+
+  Serial.println("Mag got recalibrated");
+  Serial.print("offsets: ");
+
   for(int i = 0 ; i < 3 ; i++)
   {
      mag_bias[i] = (magOffsetAutocalMax[i] + magOffsetAutocalMin[i]) / 2;
      mbias[i] = mRes * (float)mag_bias[i];
-     if(StandAloneMode)
-     {
-       Serial.print(mag_bias[i]);
-       Serial.print(" ; ");
-     }
+    
+     Serial.print(mag_bias[i]);
+     Serial.print(" ; ");
   }
-  if(StandAloneMode)
-    Serial.println();
+  Serial.println();
 }
 
 //=====================================================================================================
@@ -1529,11 +1636,9 @@ void CalibrateAccGyroMag(void)
   boolean QuitLoop = false;
   boolean LedState = 0;
 
-  if(StandAloneMode)
-  {
-    Serial.println("ACC+GYRO+MAG Calibration Started");
-    Serial.println("Please place the module on a flat and stable surface");
-  }
+  Serial.println("ACC+GYRO+MAG Calibration Started");
+  Serial.println("Please place the module on a flat and stable surface");
+
   while(!digitalRead(SWITCH_INPUT))
     delay(20);
   
@@ -1559,8 +1664,7 @@ void CalibrateAccGyroMag(void)
     if(!digitalRead(SWITCH_INPUT))
     {
       SetLedColor(LedState, 0, 0);
-      if(StandAloneMode)
-        Serial.println("Calibration interrupted");
+      Serial.println("Calibration interrupted");
       return;
     } 
   
@@ -1568,7 +1672,7 @@ void CalibrateAccGyroMag(void)
     // update min, max, sum and counter
     gyroOffsetAutocalMax[0] = max(gyroOffsetAutocalMax[0], GyroscopeX.Value);
     gyroOffsetAutocalMax[1] = max(gyroOffsetAutocalMax[1], GyroscopeY.Value);
-    gyroOffsetAutocalMax[2] = max(gyroOffsetAutocalMax[2], GyroscopeY.Value);
+    gyroOffsetAutocalMax[2] = max(gyroOffsetAutocalMax[2], GyroscopeZ.Value);
     
     gyroOffsetAutocalMin[0] = min(gyroOffsetAutocalMin[0], GyroscopeX.Value);
     gyroOffsetAutocalMin[1] = min(gyroOffsetAutocalMin[1], GyroscopeY.Value);
@@ -1596,9 +1700,9 @@ void CalibrateAccGyroMag(void)
     
     // check if there are enough stable samples. If yes, update the offsets and the "calibrate" flag
     if(gyroOffsetAutocalCounter >= (gyroOffsetAutocalTime / 1000. * SampleRate) )
-    { // update bias
-      if(StandAloneMode)
-        Serial.println("Gyro Stable");
+    { 
+      // update bias
+      Serial.println("Gyro Stable");
         
       for(int i = 0 ; i < 3 ; i++)
       {
@@ -1611,15 +1715,12 @@ void CalibrateAccGyroMag(void)
     }
   }
   
-  if(StandAloneMode)
-  {
-    sprintf(StringBuffer, "*** FOUND Bias acc= %d %d %d", accel_bias[0], accel_bias[1], accel_bias[2]);
-    printf("%s\n", StringBuffer);
-    PrintToOSC(StringBuffer);
-    sprintf(StringBuffer,"*** FOUND Bias gyro= %d %d %d", gyro_bias[0], gyro_bias[1], gyro_bias[2]);
-    printf("%s\n", StringBuffer);
-    PrintToOSC(StringBuffer);
-  }
+  sprintf(StringBuffer, "*** FOUND Bias acc= %d %d %d", accel_bias[0], accel_bias[1], accel_bias[2]);
+  printf("%s\n", StringBuffer);
+  PrintToOSC(StringBuffer);
+  sprintf(StringBuffer,"*** FOUND Bias gyro= %d %d %d", gyro_bias[0], gyro_bias[1], gyro_bias[2]);
+  printf("%s\n", StringBuffer);
+  PrintToOSC(StringBuffer);
   
   SetLedColor(1, 1, 1);
   int WinkCounter = 0;
@@ -1640,12 +1741,11 @@ void CalibrateAccGyroMag(void)
   while(!digitalRead(SWITCH_INPUT))
     delay(20);
   delay(200);
-  if(StandAloneMode)
-  {
-    sprintf(StringBuffer, "*** Proceeding to MAG calibration - Max out all axis **** ");
-    printf("%s\n", StringBuffer);
-    PrintToOSC(StringBuffer);
-  }
+
+  sprintf(StringBuffer, "*** Proceeding to MAG calibration - Max out all axis **** ");
+  printf("%s\n", StringBuffer);
+  PrintToOSC(StringBuffer);
+  
   QuitLoop = false;
   while(!QuitLoop)
   {
@@ -1674,12 +1774,11 @@ void CalibrateAccGyroMag(void)
      mag_bias[i] = (magOffsetAutocalMax[i] + magOffsetAutocalMin[i]) / 2;
      mbias[i] = mRes * (float)mag_bias[i];
   }
-  if(StandAloneMode)
-  {
-    sprintf(StringBuffer,"*** FOUND Bias mag= %d %d %d", mag_bias[0], mag_bias[1], mag_bias[2]);
-    printf("%s\n", StringBuffer);
-    PrintToOSC(StringBuffer);
-  }
+
+  sprintf(StringBuffer,"*** FOUND Bias mag= %d %d %d", mag_bias[0], mag_bias[1], mag_bias[2]);
+  printf("%s\n", StringBuffer);
+  PrintToOSC(StringBuffer);
+  
   SaveFlashPrefs();
 }
 
@@ -1948,37 +2047,32 @@ void LoadParams(void)
     if(SerFlash.open(PARAMS_FILENAME, FS_MODE_OPEN_CREATE(512, _FS_FILE_OPEN_FLAG_COMMIT)))
     {
       // Re open in write mode
-      if(StandAloneMode)
-      {
-        Serial.println("Param File created and opened for writing");
-        Serial.println("Restoring defaults");
-      }
+      Serial.println("Param File created and opened for writing");
+      Serial.println("Restoring defaults");
       RestoreDefaults();
       SerFlash.close();
-      if(StandAloneMode)
-        Serial.println("Please Reboot");
+      Serial.println("Please Reboot");
       while(1);
       // REBOOT NEEDED 
     }
   }
   else
   {
-    if(StandAloneMode)
-      Serial.println("Found Param file, parsing");
+    Serial.println("Found Param file, parsing");
+    
+     printf("This is a printf test\n");
     
     int FormatToken;
     GrabLine(StringBuffer);
     // checks if the file is properly formatted with the 0x55 header token
     if(strncmp(StringBuffer, "0x55", 4))
     {
-      if(StandAloneMode)
-        Serial.println("Restoring defaults");
+      Serial.println("Restoring defaults");
       SerFlash.close();
       SerFlash.open(PARAMS_FILENAME, FS_MODE_OPEN_WRITE);
       RestoreDefaults();
       SerFlash.close();
-      if(StandAloneMode)
-        Serial.println("Reboot Device");
+      Serial.println("Reboot Device");
     }
     else
     {
@@ -2011,8 +2105,7 @@ void LoadParams(void)
        
       if(!SampleRate)
       {
-        if(StandAloneMode)
-          Serial.println("Min Sample Rate is 3 ms");
+        Serial.println("Min Sample Rate is 3 ms");
         SampleRate = MIN_SAMPLE_RATE;
       }
       deltat = (float)SampleRate / 1000.0f;
@@ -2041,23 +2134,19 @@ void LoadParams(void)
       GrabLine(StringBuffer);
       mag_bias[2] = atoi(StringBuffer);
       
-
-      if(StandAloneMode)
-      {
-        printf("Wifi Mode = ");
-        if(APorStation == STATION_MODE)
-          printf("Station\n");
-        else
-          printf("Access Point\n");
-        printf("WiFi Encryption = %d\n", UseSecurity);
-        printf("WiFi Password = %s\n", password);
-        printf("Use DHCP = %d\n", UseDHCP);
-        printf("Loaded Accel Offsets: %d %d %d\n", accel_bias[0], accel_bias[1], accel_bias[2]);
-        printf("Loaded Gyro Offsets: %d %d %d\n", gyro_bias[0], gyro_bias[1], gyro_bias[2]);
-        printf("Loaded Mag Offsets: %d %d %d\n", mag_bias[0], mag_bias[1], mag_bias[2]);
-        Serial.print("Madgwick Specifics: Beta =");
-        Serial.println(beta);
-      }
+      printf("Wifi Mode = ");
+      if(APorStation == STATION_MODE)
+        printf("Station\n");
+      else
+        printf("Access Point\n");
+      printf("WiFi Encryption = %d\n", UseSecurity);
+      printf("WiFi Password = %s\n", password);
+      printf("Use DHCP = %d\n", UseDHCP);
+      printf("Loaded Accel Offsets: %d %d %d\n", accel_bias[0], accel_bias[1], accel_bias[2]);
+      printf("Loaded Gyro Offsets: %d %d %d\n", gyro_bias[0], gyro_bias[1], gyro_bias[2]);
+      printf("Loaded Mag Offsets: %d %d %d\n", mag_bias[0], mag_bias[1], mag_bias[2]);
+      Serial.print("Madgwick Specifics: Beta =");
+      Serial.println(beta);
       
       SerFlash.close();
     }
@@ -2072,8 +2161,7 @@ void SaveFlashPrefs(void)
   SerFlash.close();
   if(SerFlash.open(PARAMS_FILENAME, FS_MODE_OPEN_WRITE))
   {
-    if(StandAloneMode)
-      Serial.println("Saving prefs in FLASH");
+    Serial.println("Saving prefs in FLASH");
 
     // Format token 0x55
     writeStatus = SerFlash.write((uint8_t*)("0x55\n"),5);
@@ -2143,13 +2231,11 @@ void SaveFlashPrefs(void)
     writeStatus = SerFlash.write((uint8_t*)StringBuffer, StringLength(StringBuffer)); 
 
     SerFlash.close();
-    if(StandAloneMode)
-      Serial.println("Done");
+    Serial.println("Done");
   }
   else
   {
-    if(StandAloneMode)
-      Serial.println("Error saving params");
+    Serial.println("Error saving params");
   }
 }
 

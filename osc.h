@@ -15,3 +15,4 @@ void StringToOsc(OscBuffer *TheBuffer, char *OscAddress, char *StringMessage);
 void ShortToBigEndian(char *Dest, short int Val);
 void WordToBigEndian(char *Dest, Word TheWord);
 void FloatToBigEndian(char *Dest, float *TheFloat);
+int OscSkipToValue(char *pBuf, int Index);
