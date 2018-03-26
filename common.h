@@ -8,8 +8,8 @@
 // Volage on analog pins must be < 1.46V <=> 4096 (12 bits ADC)
 
 #define LED_RED          29    // GPIO 9 + PWM
-#define LED_GREEN        8     // GPIO 7 
-#define LED_BLUE         27    // GPIO 8
+#define LED_BLUE         8     // GPIO 7 
+#define LED_GREEN        27    // GPIO 8
 
 #define GPIO3    2             // GPIO + Analog Input
 #define GPIO4    6             // GPIO + Analog Input
@@ -31,7 +31,7 @@
 #define DEFAULT_UDP_PORT  8888
 #define DEFAULT_UDP_SERVICE_PORT  9999
 #define DEFAULT_SAMPLE_RATE  5
-#define VERSION_DATE        "R-IoT Bitalino v2.03 - IRCAM-PLUX 2017-2018"
+#define VERSION_DATE        "R-IoT Bitalino v2.04 - IRCAM-PLUX 2017-2018"
 #define PARAMS_FILENAME     "params.txt"
 #define WEB_SERVER_DELAY    100          // Time to press on the switch to start the webserver      
 
