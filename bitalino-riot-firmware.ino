@@ -77,7 +77,9 @@ boolean ConfigurationMode = false;
 boolean AcceptOSC = true;
 byte PageToDisplay = CONFIG_WEB_PAGE;
 unsigned int ConfigModePressCounter = 0;
-unsigned int ConfigModeAllowCounter = 1000; // allow config only shortly after start-up
+// Allow config only shortly after start-up - Counter val * Sample Period
+// Done in the idle 300 ms sample loop hence 17*300 ms = 5100 ms
+unsigned int ConfigModeAllowCounter = 17; 
 int TempInt = 0;
 boolean BlinkStatus = 0;
 
@@ -507,6 +509,30 @@ void loop() {
           printWifiData();
         }
       } // End of AP mode connection
+      
+      // Enter IMU Calibration (even if not connected)
+      // Allow configuration mode only shortly after start-up
+      if(ConfigModeAllowCounter > 0)
+      {
+        --ConfigModeAllowCounter;
+        Serial.println(ConfigModeAllowCounter);
+        SwitchState = digitalRead(SWITCH_INPUT);
+        if(!SwitchState)
+        {
+          ConfigModePressCounter++;
+          if(ConfigModePressCounter > 10)  // 10*300ms here = 3 sec after mainloop has started
+          {
+            ConfigModeAllowCounter = 0;
+            ConfigModePressCounter = 0;
+            CalibrateAccGyroMag();
+          }
+        }
+        else
+        {
+          // end of initial period that allows for calibration
+          ConfigModePressCounter = 0;
+        }
+      }      
     } // end of IF(elapsed time)
 
     if(AcceptOSC)
@@ -623,26 +649,7 @@ void loop() {
       AnalogInput1 = analogRead(GPIO4);
       AnalogInput2 = analogRead(GPIO5);
       
-      // Allow configuration mode only shortly after start-up
-      if(ConfigModeAllowCounter > 0)
-      {
-        --ConfigModeAllowCounter;
-        if(!SwitchState)
-        {
-          ConfigModePressCounter++;
-          if(ConfigModePressCounter > 600)
-          {
-            ConfigModeAllowCounter = 0;
-            ConfigModePressCounter = 0;
-            CalibrateAccGyroMag();
-          }
-        }
-        else
-        {
-          // end of initial period that allows for calibration
-          ConfigModePressCounter = 0;
-        }
-      }      
+      // Auto calibration of Acc and Gyro offsets if enabled
       if((millis() - gyroOffsetCalElapsed > gyroOffsetAutocalTime) && gyroOffsetCalDone)
       {
         gyroOffsetCalElapsed = millis();
@@ -1560,7 +1567,7 @@ void gyroOffsetCalibration(void)
     // update min, max, sum and counter
     gyroOffsetAutocalMax[0] = max(gyroOffsetAutocalMax[0], GyroscopeX.Value);
     gyroOffsetAutocalMax[1] = max(gyroOffsetAutocalMax[1], GyroscopeY.Value);
-    gyroOffsetAutocalMax[2] = max(gyroOffsetAutocalMax[2], GyroscopeY.Value);
+    gyroOffsetAutocalMax[2] = max(gyroOffsetAutocalMax[2], GyroscopeZ.Value);
     
     gyroOffsetAutocalMin[0] = min(gyroOffsetAutocalMin[0], GyroscopeX.Value);
     gyroOffsetAutocalMin[1] = min(gyroOffsetAutocalMin[1], GyroscopeY.Value);
@@ -1759,7 +1766,7 @@ void CalibrateAccGyroMag(void)
     magOffsetAutocalMin[2] = min(magOffsetAutocalMin[2], MagnetometerZ.Value);
    
     LedState = 1 - LedState;
-    SetLedColor(1, 1, 1);  
+    SetLedColor(LedState, LedState, LedState);  
   
     if(!digitalRead(SWITCH_INPUT))
     {
@@ -2058,10 +2065,7 @@ void LoadParams(void)
   }
   else
   {
-    Serial.println("Found Param file, parsing");
-    
-     printf("This is a printf test\n");
-    
+    Serial.println("Found Param file, parsing"); 
     int FormatToken;
     GrabLine(StringBuffer);
     // checks if the file is properly formatted with the 0x55 header token
