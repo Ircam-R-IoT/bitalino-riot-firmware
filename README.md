@@ -1,6 +1,16 @@
-# BITalino R-IoT firmware v2.03
+# BITalino R-IoT firmware
 firmware of the BITalino R-IoT Hardware v2.0 (USB charging, USB serial port)
 
+v2.04
+- Fixed RGB LED order (swapped green and blue)
+- Cosmetics
+- Fixed : access to calibration for 6s after booting, even if not wifi connected
+- Fixed : LED blinking (white) during MAG calibration
+
+v2.03
+- aligned IRCAM and Bitalino R-IoT versions and code
+- Sensor axis matching between LSM9DS0 and LSM9DS1 + board layout.
+- Safety on calibration: active for a short time after power cycling only (JP LAMBERT).
 
 
 #### quick start
