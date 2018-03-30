@@ -12,7 +12,6 @@ v2.03
 - Sensor axis matching between LSM9DS0 and LSM9DS1 + board layout.
 - Safety on calibration: active for a short time after power cycling only (JP LAMBERT).
 
-
 #### quick start
 
 * Download and install Energia version 17 from [energia.nu/download/](http://energia.nu/download/#previousreleases).
@@ -22,6 +21,24 @@ v2.03
 * Get the SLFS library from [github.com/Ircam-R-IoT/SLFS](https://github.com/Ircam-R-IoT/SLFS) and drop it into `Documents/Energia/libraries`.
 * Get the BITalino Energia library from [github.com/Ircam-R-IoT/bitalino-energia-library](https://github.com/Ircam-R-IoT/bitalino-energia-library) and drop it into `Documents/Energia/libraries`.
 * Open the firmware.ino file with Energia and hit the "Verify" button in the upper left corner. If it builds, you're ready to upload it to the R-IoT board.
+
+#### IMU offsets calibration
+Power up the module *then* within 6 seconds after power up, press the (right most) general purpose switch, the nearest to the RGB led. Keep it pressed for 3 seconds and the module will enter
+calibration mode.
+For best practice, the R-IoT can be hooked up to a serial terminal, including the one from Energia. We also use CoolTerm and Docklight, the board uses a 115200 baud rate. 
+Messages are output on the serial port during the calibration to indicate the calibration stages and progress. The RGB led will also wink and blink with various styles to reflect this.
+
+* Once entering calibration the module will output "ACC+GYRO+MAG Calibration Started" and will start blinking the LED red.
+* Place the module steady on a flat surface with the motion sensor facing up (RGB led and switches facing down)
+* Once found stead enough, the RGB led will turn white and the board will output the found offsets for the gyro and accelerometer.
+* Grab the module and press the (right most) general purpose switch once
+* The module will output "*** Proceeding to MAG calibration - Max out all axis **** " and the led will blink white quickly
+* Spin the module in all axis, possibly away from strong magnetic sources (speakers for instance)
+* Press the GP switch again, the module will output the found magnetometer offsets and will save all offsets in the NV memory
+* Reboot the module (reset switch or power cycle) to use the calibrated module
+
+** IMU Offsets are also displayed during the boot and printed on the USB serial port
+
 
 #### going further
 
