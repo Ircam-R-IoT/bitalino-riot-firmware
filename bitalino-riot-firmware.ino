@@ -325,27 +325,15 @@ void setup() {
   delay(10);
   
   //////////////////////////////////////////
-  //// TEMP / DEBUG
-  
-  /*unsigned char SensorToken;
-  while(1)
-  {
-    SensorToken = ReadAccLSM9DS1(WHO_AM_I);
-    Serial.print("WhoAmI: 0x");
-    Serial.println(SensorToken, HEX);
-    delay(100);
-  }
- */
+  //// Init Motion sensor
   InitLSM9DS1();
 
   delay(40);
   SetLedColor(0,1,0);
   
   // Scaling to obtain gs and deg/s 	
-  // Must match the init settings of the LSM9DS0
-  // Beware, absolute dynamic range of each sensor isn't equivalent.
-  // Accelerometers are using the whole dynamic range, gyro / mag aren't
-  gRes = 2000.0 / 32768; 	// +- 2000 deg/s
+  // Must match the init settings of the LSM9DS1
+  gRes = 2000.0 / 32768.0; 	// +- 2000 deg/s
   aRes = 8.0 / 32768.0;         // +- 8g
   mRes = 2.0 / 32768.0;         // +- 2 gauss
 
@@ -422,7 +410,10 @@ void setup() {
   }
 
   ElapsedTime = millis();
-  ElapsedTime2 = millis();  
+  ElapsedTime2 = millis();
+  
+  if(ConfigModeAllowCounter)
+    Serial.println("Calibration enabled for now");
 }
 
 
@@ -515,7 +506,6 @@ void loop() {
       if(ConfigModeAllowCounter > 0)
       {
         --ConfigModeAllowCounter;
-        Serial.println(ConfigModeAllowCounter);
         SwitchState = digitalRead(SWITCH_INPUT);
         if(!SwitchState)
         {
@@ -532,6 +522,8 @@ void loop() {
           // end of initial period that allows for calibration
           ConfigModePressCounter = 0;
         }
+        if(!ConfigModeAllowCounter)
+          Serial.println("Calibration is now disabled");
       }      
     } // end of IF(elapsed time)
 
@@ -1107,7 +1099,7 @@ void SendConfigWebPage(void)
   client.println("</span></h1>\n<br/><br/><hr>");
   client.println("<h1>R-IoT Configuration Page</h1>");
   client.println("<p><table><tr><td><strong>Module Information</strong></td></tr></table>");
-  sprintf(StringBuffer, "<table><tr><td>MAC: %02x:%02x%:%02x:%02x:%02x:%02x</td></tr>\0",mac[0], mac[1], mac[2], mac[3], mac[5], mac[5]);
+  sprintf(StringBuffer, "<table><tr><td>MAC: %02x:%02x%:%02x:%02x:%02x:%02x</td></tr>\0",mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]);
   client.println(StringBuffer);
   sprintf(StringBuffer,"<tr><td>ID: %u</td></tr>\0",ModuleID);
   client.println(StringBuffer);
