@@ -1,0 +1,5 @@
+*.h   text eol=native autocrlf=input
+*.hpp text eol=native autocrlf=input
+*.c   text eol=native autocrlf=input
+*.cpp text eol=native autocrlf=input
+*.ino text eol=native autocrlf=input
