@@ -1,6 +1,12 @@
 # BITalino R-IoT firmware
 firmware of the BITalino R-IoT Hardware v2.0 (USB charging, USB serial port)
 
+v2.043
+- Couple of fixes on the LSM9DS1 reading
+- migration do Energia 23 for better compatibility (especial on MacOS, now signed software)
+- Discards the use of an external SFLS library, now part of Energia 23
+
+
 v2.041
 - Cosmetics fixes
 - Added a serial message for calibration enabled then disabled after timeout is reached
