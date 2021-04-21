@@ -24,21 +24,19 @@ v2.03
 
 #### quick start
 
-* Download and install Energia version 17 from [energia.nu/download/](http://energia.nu/download/#previousreleases).
-* Modify the `cc3200.ld` file and change the `HEAP_SIZE` value to `0x00007500` :
-  * on Windows this file is located into `C:\Program Files(x86)\energia-0101E0017\hardware\cc3200\cores\cc3200`
-  * on Mac OS, right-click on the Energia application and select "show package contents", then go to `Contents/Resources/Java/hardware/cc3200/cores/cc3200`
-* Additionally, the WiFiUdp.cpp source file must be modified (hardware\cc3200\libraries\Wifi), as its function parsePacket() blocks during 10ms. The code has been modified to reduce this timeout to 1ms (change timeout.tv_usec = 1000 instead of 10000)
+* Download and install Energia version 23 from [energia.nu/download/](http://energia.nu/download/).
+* Note : Version 23 now uses the board manager and hardware support isn't located in the Energia folder anymore.
+* Modify the `cc3200.ld` file and change the `HEAP_SIZE` value to `0x00008000` and comment the last line /*PROVIDE(end = _end);*/
+  * on Windows this file is located into `C:\Users\<USER NAME>\AppData\Local\Energia15\packages\energia\hardware\cc3200\1.0.3\cores`
+  * on Mac OS, go on your libraries folder (might be hidden), then go to `Energia15\packages\energia\hardware\cc3200\1.0.3\cores`
+* Additionally, the WiFiUdp.cpp source file must be modified (Energia15\packages\energia\hardware\cc3200\1.0.3\libraries\WiFi), as its function parsePacket() blocks during 10ms. The code has been modified to reduce this timeout to 1ms (change timeout.tv_usec = 1000 instead of 10000)
   to maintain a low latency and a 200Hz update rate of the IMU streaming.
-* We also provide on this git the pre-modified version of Energia 17 (windows and macOS) for an easier start point. Check the root of this git repo.
-* Get the SLFS library from [github.com/Ircam-R-IoT/SLFS](https://github.com/Ircam-R-IoT/SLFS) and drop it into `Documents/Energia/libraries`.
 * Get the BITalino Energia library from [github.com/Ircam-R-IoT/bitalino-energia-library](https://github.com/Ircam-R-IoT/bitalino-energia-library) and drop it into `Documents/Energia/libraries`.
 * Open the firmware.ino file with Energia and hit the "Verify" button in the upper left corner. If it builds, you're ready to upload it to the R-IoT board.
 
 
 #### IMU offsets calibration
-Power up the module *then* within 6 seconds after power up, press the (right most) general purpose switch, the nearest to the RGB led. Keep it pressed for 3 seconds and the module will enter
-calibration mode.
+Power up the module *then* within 6 seconds after power up, press the (right most) general purpose switch, the nearest to the RGB led. Keep it pressed for 3 seconds and the module will enter calibration mode.
 For best practice, the R-IoT can be hooked up to a serial terminal, including the one from Energia. We also use CoolTerm and Docklight, the board uses a 115200 baud rate. 
 Messages are output on the serial port during the calibration to indicate the calibration stages and progress. The RGB led will also wink and blink with various styles to reflect this.
 
