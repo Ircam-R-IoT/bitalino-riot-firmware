@@ -4,7 +4,6 @@ firmware of the BITalino R-IoT Hardware v2.0 (USB charging, USB serial port)
 v2.041
 - Cosmetics fixes
 - Added a serial message for calibration enabled then disabled after timeout is reached
-- 
 
 v2.04
 - Fixed RGB LED order (swapped green and blue)

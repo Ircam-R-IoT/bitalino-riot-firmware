@@ -405,7 +405,8 @@ void setup() {
       Serial.print("Setting up Access Point named: ");
       Serial.println(ssidAP);
     }
-    WiFi.beginNetwork((char *)ssidAP);
+    //WiFi.beginNetwork((char *)ssidAP);
+    WiFi.beginNetwork((char *)ssidAP, "12345678");
     WiFi.macAddress(mac);
   }
 
@@ -2319,9 +2320,3 @@ void PrintToOSC(char *StringMessage)
   UdpPacket.endPacket();
   delay(20);
 }
-
-
-
-
-
-
