@@ -115,10 +115,7 @@ unsigned char ReadAccLSM9DS1(unsigned char RegAddress)
     Wire.write(RegAddress);
     Wire.endTransmission();
     Wire.requestFrom(LSM9DS1_ADDRESS_MAG, 1);
-    // Wait around until enough data is available
-    while (Wire.available() < 1);
     DataLSM9DS1 = Wire.read();
-    Wire.endTransmission();
   }
   
   return(DataLSM9DS1);
@@ -167,10 +164,7 @@ unsigned char ReadMagLSM9DS1(unsigned char RegAddress)
     Wire.write(RegAddress);
     Wire.endTransmission();
     Wire.requestFrom(LSM9DS1_ADDRESS_MAG, 1);
-    // Wait around until enough data is available
-    while (Wire.available() < 1);
     DataLSM9DS1 = Wire.read();
-    Wire.endTransmission();
   }
   
   return(DataLSM9DS1);
@@ -213,8 +207,7 @@ void ReadAccel(void)
     Wire.write(OUT_X_L_A | JUST_READ);
     Wire.endTransmission();
     Wire.requestFrom(LSM9DS1_ADDRESS_ACCELGYRO, 6);
-    // Wait around until enough data is available
-    while (Wire.available() < 6);
+    
     LSB = Wire.read();
     MSB = Wire.read();
     AccelerationY.Val[0] = LSB;
@@ -231,7 +224,6 @@ void ReadAccel(void)
     MSB = Wire.read();
     AccelerationZ.Val[0] = LSB;
     AccelerationZ.Val[1] = MSB;	
-    Wire.endTransmission();
   }
   // Sign
   AccelerationX.Value = -AccelerationX.Value;
@@ -270,8 +262,6 @@ void ReadGyro(void)
     Wire.write(OUT_X_L_G | JUST_READ);
     Wire.endTransmission();
     Wire.requestFrom(LSM9DS1_ADDRESS_ACCELGYRO, 6);
-    // Wait around until enough data is available
-    while (Wire.available() < 6);
     LSB = Wire.read();
     MSB = Wire.read();
     GyroscopeY.Val[0] = LSB;
@@ -288,7 +278,6 @@ void ReadGyro(void)
     MSB = Wire.read();
     GyroscopeZ.Val[0] = LSB;
     GyroscopeZ.Val[1] = MSB;
-    Wire.endTransmission();
   }
   
   // Sign
@@ -330,8 +319,6 @@ void ReadMagneto(void)
     Wire.write(OUT_X_L_M | JUST_READ);
     Wire.endTransmission();
     Wire.requestFrom(LSM9DS1_ADDRESS_ACCELGYRO, 6);
-    // Wait around until enough data is available
-    while (Wire.available() < 6);
     LSB = Wire.read();
     MSB = Wire.read();
     MagnetometerY.Val[0] = LSB;
@@ -346,7 +333,6 @@ void ReadMagneto(void)
     MSB = Wire.read();
     MagnetometerZ.Val[0] = LSB;
     MagnetometerZ.Val[1] = MSB;
-    Wire.endTransmission();
   }
   // Sign
   MagnetometerX.Value = -MagnetometerX.Value;
@@ -376,13 +362,10 @@ void ReadTemperature(void)
     Wire.write(OUT_TEMP_L | JUST_READ);
     Wire.endTransmission();
     Wire.requestFrom(LSM9DS1_ADDRESS_MAG, 2);
-    // Wait around until enough data is available
-    while (Wire.available() < 2);
     LSB = Wire.read();
     MSB = Wire.read();
     Temperature.Val[0] = LSB;
     Temperature.Val[1] = MSB;	
-    Wire.endTransmission();
   }
 }
 

@@ -31,7 +31,7 @@
 #define DEFAULT_UDP_PORT  8888
 #define DEFAULT_UDP_SERVICE_PORT  9999
 #define DEFAULT_SAMPLE_RATE  5
-#define VERSION_DATE        "R-IoT Bitalino v2.041 - IRCAM-PLUX 2017-2018"
+#define VERSION_DATE        "R-IoT Bitalino v2.043 - IRCAM-PLUX 2017-2021"
 #define PARAMS_FILENAME     "params.txt"
 #define WEB_SERVER_DELAY    100          // Time to press on the switch to start the webserver      
 
