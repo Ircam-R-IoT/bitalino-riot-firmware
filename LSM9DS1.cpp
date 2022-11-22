@@ -368,5 +368,3 @@ void ReadTemperature(void)
     Temperature.Val[1] = MSB;	
   }
 }
-
-

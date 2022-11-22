@@ -31,7 +31,7 @@
 #define DEFAULT_UDP_PORT  8888
 #define DEFAULT_UDP_SERVICE_PORT  9999
 #define DEFAULT_SAMPLE_RATE  5
-#define VERSION_DATE        "R-IoT Bitalino v2.043 - IRCAM-PLUX 2017-2021"
+#define VERSION_DATE        "R-IoT Bitalino v2.044 - IRCAM-PLUX 2017-2022"
 #define PARAMS_FILENAME     "params.txt"
 #define WEB_SERVER_DELAY    100          // Time to press on the switch to start the webserver      
 
@@ -55,8 +55,8 @@ typedef union uWord {
 } Word;
 
 // For Mag calibration stages
-typedef enum coords {X, Y, Z};
-typedef enum CalStage {START, X_PLUS_0, X_PLUS_180, X_MINUS_0, X_MINUS_180, Y_PLUS_0, Y_PLUS_180, Y_MINUS_0, Y_MINUS_180, Z_PLUS_0, Z_PLUS_180, Z_MINUS_0, Z_MINUS_180, END}; 
+enum coords {X, Y, Z};
+enum CalStage {START, X_PLUS_0, X_PLUS_180, X_MINUS_0, X_MINUS_180, Y_PLUS_0, Y_PLUS_180, Y_MINUS_0, Y_MINUS_180, Z_PLUS_0, Z_PLUS_180, Z_MINUS_0, Z_MINUS_180, END}; 
 
 
 #define IPV4_SIZE  4
@@ -107,6 +107,7 @@ unsigned char GrabLine(char *StringBuffer);
 unsigned int StringLength(char* StringBuffer);
 char * ftoa(double f, char * buf, int precision);
 void SetLedColor(boolean red, boolean green, boolean blue);
+void pprintf(const char *format, ...);
 
 
 

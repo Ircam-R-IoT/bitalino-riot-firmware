@@ -5,6 +5,8 @@
  IRCAM - Emmanuel FLETY - Music Bricks - Rapid Mix
  
  Rev History :
+
+ 2.044 : final migration of the fw to Energia 23, mostly fixes to the changes in the SFLS library API (file opening and saving returned values & codes)
  
  2.0 : moving to the LSM9DS1 motion sensor, new PCB from PLUX and secondary UART. UART0 : FTDI / UART1 : Bitalino
  
@@ -41,14 +43,10 @@
 byte mac[6];
 const char TheSSID[] = "riot";
 const uint16_t TheDestPort = DEFAULT_UDP_PORT;
-const uint8_t TheLocalIP[] = {
-  192,168,1,40};
-const uint8_t TheSubnetMask[] = {
-  255,255,255,0};
-const uint8_t TheGatewayIP[] = {
-  192,168,1,1};
-const uint8_t TheDestIP[] = {
-  192,168,1,100};
+const uint8_t TheLocalIP[] = { 192,168,1,40};
+const uint8_t TheSubnetMask[] = { 255,255,255,0};
+const uint8_t TheGatewayIP[] = { 192,168,1,1};
+const uint8_t TheDestIP[] = { 192,168,1,100};
 const unsigned long TheSampleRate = DEFAULT_SAMPLE_RATE;
 const uint8_t TheID = 0; 
 
@@ -556,21 +554,21 @@ void loop() {
         for (int i=0 ; i < len ; i++)
         {
           if(packetBuffer[i] == '\0')
-            printf("_");
+            pprintf("_");
           else
-            printf("%c",packetBuffer[i]);
+            pprintf("%c",packetBuffer[i]);
         }
-        printf("\n");
+        pprintf("\n");
         
-        printf("Generated Osc Message:\n");
+        pprintf("Generated Osc Message:\n");
         for (int i=0 ; i < len ; i++)
         {
           if(Message.buf[i] == '\0')
-            printf("_");
+            pprintf("_");
           else
-            printf("%c",Message.buf[i]);
+            pprintf("%c",Message.buf[i]);
         }
-        printf("\n");*/
+        pprintf("\n");*/
         
         // Actual parsing
         // Checks that's for the proper ID / module
@@ -587,7 +585,7 @@ void loop() {
             Index = OscSkipToValue(pUDP, Index);
             
             //Serial.println("After OSC SKIP");
-            //printf("Index = %d\n", Index);
+            //pprintf("Index = %d\n", Index);
             
             int OscRemoteValue, TempInt;
             TempInt = pUDP[Index];
@@ -608,7 +606,7 @@ void loop() {
             else
               RemoteOutputState = LOW;
             // Debug
-            printf("Remote Control Output update = %d\n", RemoteOutputState);
+            pprintf("Remote Control Output update = %d\n", RemoteOutputState);
             digitalWrite(REMOTE_OUTPUT,RemoteOutputState);
           }
           // add here other keywords like changing the sample rate and saving 
@@ -1285,7 +1283,7 @@ void printWifiData() {
   Serial.println(ip);
 
   // print your MAC address:  
-  printf("MAC address: %02x:%02x:%02x:%02x:%02x:%02x\n", mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]);
+  pprintf("MAC address: %02x:%02x:%02x:%02x:%02x:%02x\n", mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]);
 
   Serial.print("Dest. IP Address: ");
   Serial.println(DestIP);
@@ -1300,9 +1298,9 @@ void printWifiData() {
   Serial.print("Gateway: ");
   Serial.println(gateway);
 
-  printf("UDP/OSC Port=%u\n", DestPort);    
-  printf("Module ID=%u\n", ModuleID);    
-  printf("Sample Period (ms)=%u\n", SampleRate);
+  pprintf("UDP/OSC Port=%u\n", DestPort);    
+  pprintf("Module ID=%u\n", ModuleID);    
+  pprintf("Sample Period (ms)=%u\n", SampleRate);
 }
 
 
@@ -1716,10 +1714,10 @@ void CalibrateAccGyroMag(void)
   }
   
   sprintf(StringBuffer, "*** FOUND Bias acc= %d %d %d", accel_bias[0], accel_bias[1], accel_bias[2]);
-  printf("%s\n", StringBuffer);
+  pprintf("%s\n", StringBuffer);
   PrintToOSC(StringBuffer);
   sprintf(StringBuffer,"*** FOUND Bias gyro= %d %d %d", gyro_bias[0], gyro_bias[1], gyro_bias[2]);
-  printf("%s\n", StringBuffer);
+  pprintf("%s\n", StringBuffer);
   PrintToOSC(StringBuffer);
   
   SetLedColor(1, 1, 1);
@@ -1743,7 +1741,7 @@ void CalibrateAccGyroMag(void)
   delay(200);
 
   sprintf(StringBuffer, "*** Proceeding to MAG calibration - Max out all axis **** ");
-  printf("%s\n", StringBuffer);
+  pprintf("%s\n", StringBuffer);
   PrintToOSC(StringBuffer);
   
   QuitLoop = false;
@@ -1776,7 +1774,7 @@ void CalibrateAccGyroMag(void)
   }
 
   sprintf(StringBuffer,"*** FOUND Bias mag= %d %d %d", mag_bias[0], mag_bias[1], mag_bias[2]);
-  printf("%s\n", StringBuffer);
+  pprintf("%s\n", StringBuffer);
   PrintToOSC(StringBuffer);
   
   SaveFlashPrefs();
@@ -1819,47 +1817,47 @@ void ProcessSerial(void)
   byte temp_ip[4];
 
   // Debug
-  //printf("Cmd: %s - OK\n",StringBuffer);
+  //pprintf("Cmd: %s - OK\n",StringBuffer);
 
   // Send current config to the configuration app
   if(!strncmp("cfgrequest",StringBuffer,10))
   {
     // Outputs all the configuration  
-    printf("%s %d\n", TEXT_DHCP, UseDHCP);
-    printf("%s %s\n", TEXT_SSID, ssid);
-    printf("%s %d\n", TEXT_WIFI_MODE, APorStation);
-    printf("%s %d\n", TEXT_SECURITY, UseSecurity);
-    printf("%s %s\n", TEXT_PASSWORD, password);
-    printf("%s %u.%u.%u.%u\n", TEXT_OWNIP, LocalIP[0], LocalIP[1], LocalIP[2], LocalIP[3] );
-    printf("%s %u.%u.%u.%u\n", TEXT_DESTIP, DestIP[0], DestIP[1], DestIP[2], DestIP[3]);
-    printf("%s %u.%u.%u.%u\n", TEXT_GATEWAY, GatewayIP[0], GatewayIP[1],GatewayIP[2],GatewayIP[3]);
-    printf("%s %u.%u.%u.%u\n", TEXT_MASK, SubnetMask[0], SubnetMask[1], SubnetMask[2], SubnetMask[3] );
-    printf("%s %u\n", TEXT_PORT, DestPort);
-    printf("%s %u\n", TEXT_MASTER_ID, ModuleID);
-    printf("%s %u\n", TEXT_SAMPLE_RATE, SampleRate);
+    pprintf("%s %d\n", TEXT_DHCP, UseDHCP);
+    pprintf("%s %s\n", TEXT_SSID, ssid);
+    pprintf("%s %d\n", TEXT_WIFI_MODE, APorStation);
+    pprintf("%s %d\n", TEXT_SECURITY, UseSecurity);
+    pprintf("%s %s\n", TEXT_PASSWORD, password);
+    pprintf("%s %u.%u.%u.%u\n", TEXT_OWNIP, LocalIP[0], LocalIP[1], LocalIP[2], LocalIP[3] );
+    pprintf("%s %u.%u.%u.%u\n", TEXT_DESTIP, DestIP[0], DestIP[1], DestIP[2], DestIP[3]);
+    pprintf("%s %u.%u.%u.%u\n", TEXT_GATEWAY, GatewayIP[0], GatewayIP[1],GatewayIP[2],GatewayIP[3]);
+    pprintf("%s %u.%u.%u.%u\n", TEXT_MASK, SubnetMask[0], SubnetMask[1], SubnetMask[2], SubnetMask[3] );
+    pprintf("%s %u\n", TEXT_PORT, DestPort);
+    pprintf("%s %u\n", TEXT_MASTER_ID, ModuleID);
+    pprintf("%s %u\n", TEXT_SAMPLE_RATE, SampleRate);
     
     // All offsets as lists + rotation matrix
-    printf("%s %d\n", TEXT_ACC_OFFSETX, accel_bias[0]);
-    printf("%s %d\n", TEXT_ACC_OFFSETY, accel_bias[1]);
-    printf("%s %d\n", TEXT_ACC_OFFSETZ, accel_bias[2]);
+    pprintf("%s %d\n", TEXT_ACC_OFFSETX, accel_bias[0]);
+    pprintf("%s %d\n", TEXT_ACC_OFFSETY, accel_bias[1]);
+    pprintf("%s %d\n", TEXT_ACC_OFFSETZ, accel_bias[2]);
    
-    printf("%s %d\n", TEXT_GYRO_OFFSETX, gyro_bias[0]);
-    printf("%s %d\n", TEXT_GYRO_OFFSETY, gyro_bias[1]);
-    printf("%s %d\n", TEXT_GYRO_OFFSETZ, gyro_bias[2]);
+    pprintf("%s %d\n", TEXT_GYRO_OFFSETX, gyro_bias[0]);
+    pprintf("%s %d\n", TEXT_GYRO_OFFSETY, gyro_bias[1]);
+    pprintf("%s %d\n", TEXT_GYRO_OFFSETZ, gyro_bias[2]);
     
-    printf("%s %d\n", TEXT_MAG_OFFSETX, mag_bias[0]);
-    printf("%s %d\n", TEXT_MAG_OFFSETY, mag_bias[1]);
-    printf("%s %d\n", TEXT_MAG_OFFSETZ, mag_bias[2]);   
+    pprintf("%s %d\n", TEXT_MAG_OFFSETX, mag_bias[0]);
+    pprintf("%s %d\n", TEXT_MAG_OFFSETY, mag_bias[1]);
+    pprintf("%s %d\n", TEXT_MAG_OFFSETZ, mag_bias[2]);   
    
-    printf("%s %f\n", TEXT_BETA, beta); 
+    pprintf("%s %f\n", TEXT_BETA, beta); 
       
-    printf("refresh\n");
+    pprintf("refresh\n");
   }
 
   // Ping / Echo question/answer from the GUI
   else if(!strncmp("ping",StringBuffer,4))
   {
-    printf("echo\n");	// a simple ASCII echo answer to let the GUI know the COM port is the right one
+    pprintf("echo\n");	// a simple ASCII echo answer to let the GUI know the COM port is the right one
     return;
   }
 
@@ -1893,9 +1891,9 @@ void ProcessSerial(void)
   else if(!strncmp(TEXT_OWNIP,StringBuffer,5))
   {
     Index = SkipToValue(StringBuffer);
-    //printf("%s\n",&StringBuffer[Index]);
+    //pprintf("%s\n",&StringBuffer[Index]);
     ParseIP(&StringBuffer[Index], &LocalIP);
-    //printf("own ip update %u.%u.%u.%u\n",pucIP_Addr[0], pucIP_Addr[1], pucIP_Addr[2], pucIP_Addr[3]);
+    //pprintf("own ip update %u.%u.%u.%u\n",pucIP_Addr[0], pucIP_Addr[1], pucIP_Addr[2], pucIP_Addr[3]);
     return;
   }	
   else if(!strncmp(TEXT_DESTIP,StringBuffer,6))
@@ -2025,7 +2023,7 @@ void ProcessSerial(void)
   {
     // Re open in write mode
     SerFlash.close();
-    if(SerFlash.open(PARAMS_FILENAME, FS_MODE_OPEN_WRITE))
+    if(SerFlash.open(PARAMS_FILENAME, FS_MODE_OPEN_WRITE) == SL_FS_OK)
     {
       Serial.println("Restoring defaults");
       RestoreDefaults();
@@ -2039,12 +2037,12 @@ void ProcessSerial(void)
 void LoadParams(void)
 {
   // Check if file exists
-  if(!SerFlash.open(PARAMS_FILENAME, FS_MODE_OPEN_READ))
+  if(SerFlash.open(PARAMS_FILENAME, FS_MODE_OPEN_READ) != SL_FS_OK)
   {
     SerFlash.close();
     // Creates the file
     Serial.println("Param File not found");
-    if(SerFlash.open(PARAMS_FILENAME, FS_MODE_OPEN_CREATE(512, _FS_FILE_OPEN_FLAG_COMMIT)))
+    if(SerFlash.open(PARAMS_FILENAME, FS_MODE_OPEN_CREATE(512, _FS_FILE_OPEN_FLAG_COMMIT)) == SL_FS_OK)
     {
       // Re open in write mode
       Serial.println("Param File created and opened for writing");
@@ -2131,17 +2129,17 @@ void LoadParams(void)
       GrabLine(StringBuffer);
       mag_bias[2] = atoi(StringBuffer);
       
-      printf("Wifi Mode = ");
+      pprintf("Wifi Mode = ");
       if(APorStation == STATION_MODE)
-        printf("Station\n");
+        pprintf("Station\n");
       else
-        printf("Access Point\n");
-      printf("WiFi Encryption = %d\n", UseSecurity);
-      printf("WiFi Password = %s\n", password);
-      printf("Use DHCP = %d\n", UseDHCP);
-      printf("Loaded Accel Offsets: %d %d %d\n", accel_bias[0], accel_bias[1], accel_bias[2]);
-      printf("Loaded Gyro Offsets: %d %d %d\n", gyro_bias[0], gyro_bias[1], gyro_bias[2]);
-      printf("Loaded Mag Offsets: %d %d %d\n", mag_bias[0], mag_bias[1], mag_bias[2]);
+        pprintf("Access Point\n");
+      pprintf("WiFi Encryption = %d\n", UseSecurity);
+      pprintf("WiFi Password = %s\n", password);
+      pprintf("Use DHCP = %d\n", UseDHCP);
+      pprintf("Loaded Accel Offsets: %d %d %d\n", accel_bias[0], accel_bias[1], accel_bias[2]);
+      pprintf("Loaded Gyro Offsets: %d %d %d\n", gyro_bias[0], gyro_bias[1], gyro_bias[2]);
+      pprintf("Loaded Mag Offsets: %d %d %d\n", mag_bias[0], mag_bias[1], mag_bias[2]);
       Serial.print("Madgwick Specifics: Beta =");
       Serial.println(beta);
       
@@ -2156,7 +2154,7 @@ void SaveFlashPrefs(void)
 
   // File was opened for Read so far, re open in write mode
   SerFlash.close();
-  if(SerFlash.open(PARAMS_FILENAME, FS_MODE_OPEN_WRITE))
+  if(SerFlash.open(PARAMS_FILENAME, FS_MODE_OPEN_WRITE) == SL_FS_OK)
   {
     Serial.println("Saving prefs in FLASH");
 

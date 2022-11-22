@@ -3,6 +3,7 @@
 // Handles the file system of the FLASH, to store parameters
 #include <SLFS.h>
 #include <WiFi.h>
+#include <stdarg.h>
 
 #include "common.h"
 
@@ -46,7 +47,7 @@ void ParseIP(char *TheString, IPAddress *TheIP)
     TempString[LocalStrIndex] = '\0';
     StrIndex++;	// skips the dot for next iteration
     tempIP[i] = atoi(TempString);
-    //printf("found %u\n", tempIP[i]);
+    //pprintf("found %u\n", tempIP[i]);
     LocalStrIndex = 0;
   }
   *TheIP = IPAddress(tempIP[0], tempIP[1], tempIP[2], tempIP[3]);
@@ -61,8 +62,8 @@ unsigned char SkipToValue(char *StringBuffer)
   {
     if(i >= MAX_SERIAL)
     {
-      printf("Syntax error - '=' sign is missing\n");
-      //printf("%s\n",StringBuffer);
+      pprintf("Syntax error - '=' sign is missing\n");
+      //pprintf("%s\n",StringBuffer);
       return(0);
     }
     i++;
@@ -82,8 +83,8 @@ unsigned char SkipToNextValue(char *StringBuffer, unsigned char StartIndex)
   {
     if(i >= MAX_STRING_LEN)
     {
-      printf("Syntax error - missing separator\n");
-      //printf("%s\n",StringBuffer);
+      pprintf("Syntax error - missing separator\n");
+      //pprintf("%s\n",StringBuffer);
       return(0);
     }
     i++;
@@ -237,3 +238,17 @@ void SetLedColor(boolean red, boolean green, boolean blue)
  digitalWrite(LED_BLUE, !blue);
 }
 
+#define PRINTF_BUF 80 // define the tmp buffer size (change if desired)
+void pprintf(const char *format, ...) {
+  char buf[PRINTF_BUF];
+  va_list ap;
+  va_start(ap, format);
+  vsnprintf(buf, sizeof(buf), format, ap);
+  for(char *p = &buf[0]; *p; p++) // emulate cooked mode for newlines
+  {
+    if(*p == '\n')
+        Serial.write('\r');
+    Serial.write(*p);
+  }
+  va_end(ap);
+}
