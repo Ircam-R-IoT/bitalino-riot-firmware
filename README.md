@@ -6,6 +6,9 @@ v2.1
 - Fixed the Madgwick filter implementation as per some online updates and found the the original published filter had a few errors in the calculations
 - Filter more stable as a result
 
+v2.044
+- Some fixes for compiling correctly with Energia 23. Minor fixes for SFLS api and return values when opening the prefs file
+
 v2.043
 - Couple of fixes on the LSM9DS1 reading
 - migration do Energia 23 for better compatibility (especial on MacOS, now signed software)
