@@ -1,6 +1,11 @@
 # BITalino R-IoT firmware
 firmware of the BITalino R-IoT Hardware v2.0 (USB charging, USB serial port)
 
+v2.1
+- Fixed the magnetometers scale to 4 gauss instead of 2 but this doesn't change the orientation filter since normalized values are used there
+- Fixed the Madgwick filter implementation as per some online updates and found the the original published filter had a few errors in the calculations
+- Filter more stable as a result
+
 v2.043
 - Couple of fixes on the LSM9DS1 reading
 - migration do Energia 23 for better compatibility (especial on MacOS, now signed software)
