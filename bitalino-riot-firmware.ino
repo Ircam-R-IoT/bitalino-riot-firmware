@@ -6,6 +6,8 @@
  
  Rev History :
 
+ 2.1 : attempt to correct Madgwick algorithm for proper yaw convergence
+
  2.044 : final migration of the fw to Energia 23, mostly fixes to the changes in the SFLS library API (file opening and saving returned values & codes)
  
  2.0 : moving to the LSM9DS1 motion sensor, new PCB from PLUX and secondary UART. UART0 : FTDI / UART1 : Bitalino
@@ -331,9 +333,9 @@ void setup() {
   
   // Scaling to obtain gs and deg/s 	
   // Must match the init settings of the LSM9DS1
-  gRes = 2000.0 / 32768.0; 	// +- 2000 deg/s
-  aRes = 8.0 / 32768.0;         // +- 8g
-  mRes = 2.0 / 32768.0;         // +- 2 gauss
+  gRes = 2000.0f / 32768.0f; 	// +- 2000 deg/s
+  aRes = 8.0f / 32768.0f;         // +- 8g
+  mRes = 4.0f / 32768.0f;         // +- 4 gauss
 
 
   // Finalize the bias unit conversion
@@ -1332,6 +1334,7 @@ void MadgwickAHRSupdate(float ax, float ay, float az, float gx, float gy, float 
 	float qDot1, qDot2, qDot3, qDot4;
 	float hx, hy;
 	float _2q1mx, _2q1my, _2q1mz, _2q2mx, _2bx, _2bz, _4bx, _4bz, _2q1, _2q2, _2q3, _2q4, _2q1q3, _2q3q4, q1q1, q1q2, q1q3, q1q4, q2q2, q2q3, q2q4, q3q3, q3q4, q4q4;
+  float _8bx, _8bz;
 
 	// Use IMU algorithm if magnetometer measurement invalid (avoids NaN in magnetometer normalisation)
 	if((mx == 0.0f) && (my == 0.0f) && (mz == 0.0f)) {
@@ -1384,6 +1387,29 @@ void MadgwickAHRSupdate(float ax, float ay, float az, float gx, float gy, float 
 		q3q4 = q3 * q4;
 		q4q4 = q4 * q4;
 
+   /*  These lines where changed in the code, sebastian emailed me that the code on the website was old and soon will be replaced by a new version.
+
+    // Reference direction of Earth's magnetic field
+    hx = mx * q1q1 - _2q1my * q4 + _2q1mz * q3 + mx * q2q2 + _2q2 * my * q3 + _2q2 * mz * q4 - mx * q3q3 - mx * q4q4;
+    hy = _2q1mx * q4 + my * q1q1 - _2q1mz * q2 + _2q2mx * q3 - my * q2q2 + my * q3q3 + _2q3 * mz * q4 - my * q4q4;
+    _2bx = sQrt(hx * hx + hy * hy);
+    _2bz = -_2q1mx * q3 + _2q1my * q2 + mz * q1q1 + _2q2mx * q4 - mz * q2q2 + _2q3 * my * q4 - mz * q3q3 + mz * q4q4;
+    _4bx = 2.0f * _2bx;
+    _4bz = 2.0f * _2bz;
+    _8bx = 2.0f * _4bx;
+    _8bz = 2.0f * _4bz;
+
+    // Gradient decent algorithm corrective step
+    s0= -_2q3*(2.0f*(q2q4 - q1q3) - ax)    +   _2q2*(2.0f*(q1q2 + q3q4) - ay)   +  -_4bz*q3*(_4bx*(0.5 - q3q3 - q4q4) + _4bz*(q2q4 - q1q3) - mx)   +   (-_4bx*q4+_4bz*q2)*(_4bx*(q2q3 - q1q4) + _4bz*(q1q2 + q3q4) - my)    +   _4bx*q3*(_4bx*(q1q3 + q2q4) + _4bz*(0.5 - q2q2 - q3q3) - mz);
+    
+    s1= _2q4*(2.0f*(q2q4 - q1q3) - ax) +   _2q1*(2.0f*(q1q2 + q3q4) - ay) +   -4.0f*q2*(2.0f*(0.5 - q2q2 - q3q3) - az)    +   _4bz*q4*(_4bx*(0.5 - q3q3 - q4q4) + _4bz*(q2q4 - q1q3) - mx)   + (_4bx*q3+_4bz*q1)*(_4bx*(q2q3 - q1q4) + _4bz*(q1q2 + q3q4) - my)   +   (_4bx*q4-_8bz*q2)*(_4bx*(q1q3 + q2q4) + _4bz*(0.5 - q2q2 - q3q3) - mz);             
+    
+    s2= -_2q1*(2.0f*(q2q4 - q1q3) - ax)    +     _2q4*(2.0f*(q1q2 + q3q4) - ay)   +   (-4.0f*q3)*(2.0f*(0.5 - q2q2 - q3q3) - az) +   (-_8bx*q3-_4bz*q1)*(_4bx*(0.5 - q3q3 - q4q4) + _4bz*(q2q4 - q1q3) - mx)+(_4bx*q2+_4bz*q4)*(_4bx*(q2q3 - q1q4) + _4bz*(q1q2 + q3q4) - my)+(_4bx*q1-_8bz*q3)*(_4bx*(q1q3 + q2q4) + _4bz*(0.5 - q2q2 - q3q3) - mz);
+    
+    s3= _2q2*(2.0f*(q2q4 - q1q3) - ax) +   _2q3*(2.0f*(q1q2 + q3q4) - ay)+(-_8bx*q4+_4bz*q2)*(_4bx*(0.5 - q3q3 - q4q4) + _4bz*(q2q4 - q1q3) - mx)+(-_4bx*q1+_4bz*q3)*(_4bx*(q2q3 - q1q4) + _4bz*(q1q2 + q3q4) - my)+(_4bx*q2)*(_4bx*(q1q3 + q2q4) + _4bz*(0.5 - q2q2 - q3q3) - mz);
+  
+*/
+
 		// Reference direction of Earth's magnetic field
 		hx = mx * q1q1 - _2q1my * q4 + _2q1mz * q3 + mx * q2q2 + _2q2 * my * q3 + _2q2 * mz * q4 - mx * q3q3 - mx * q4q4;
 		hy = _2q1mx * q4 + my * q1q1 - _2q1mz * q2 + _2q2mx * q3 - my * q2q2 + my * q3q3 + _2q3 * mz * q4 - my * q4q4;
@@ -1391,12 +1417,20 @@ void MadgwickAHRSupdate(float ax, float ay, float az, float gx, float gy, float 
 		_2bz = -_2q1mx * q3 + _2q1my * q2 + mz * q1q1 + _2q2mx * q4 - mz * q2q2 + _2q3 * my * q4 - mz * q3q3 + mz * q4q4;
 		_4bx = 2.0f * _2bx;
 		_4bz = 2.0f * _2bz;
+    // Correction ?
+    _8bx = 2.0f * _4bx;
+    _8bz = 2.0f * _4bz;
 
 		// Gradient decent algorithm corrective step
-		s0 = -_2q3 * (2.0f * q2q4 - _2q1q3 - ax) + _2q2 * (2.0f * q1q2 + _2q3q4 - ay) - _2bz * q3 * (_2bx * (0.5f - q3q3 - q4q4) + _2bz * (q2q4 - q1q3) - mx) + (-_2bx * q4 + _2bz * q2) * (_2bx * (q2q3 - q1q4) + _2bz * (q1q2 + q3q4) - my) + _2bx * q3 * (_2bx * (q1q3 + q2q4) + _2bz * (0.5f - q2q2 - q3q3) - mz);
-		s1 = _2q4 * (2.0f * q2q4 - _2q1q3 - ax) + _2q1 * (2.0f * q1q2 + _2q3q4 - ay) - 4.0f * q2 * (1 - 2.0f * q2q2 - 2.0f * q3q3 - az) + _2bz * q4 * (_2bx * (0.5f - q3q3 - q4q4) + _2bz * (q2q4 - q1q3) - mx) + (_2bx * q3 + _2bz * q1) * (_2bx * (q2q3 - q1q4) + _2bz * (q1q2 + q3q4) - my) + (_2bx * q4 - _4bz * q2) * (_2bx * (q1q3 + q2q4) + _2bz * (0.5f - q2q2 - q3q3) - mz);
-		s2 = -_2q1 * (2.0f * q2q4 - _2q1q3 - ax) + _2q4 * (2.0f * q1q2 + _2q3q4 - ay) - 4.0f * q3 * (1 - 2.0f * q2q2 - 2.0f * q3q3 - az) + (-_4bx * q3 - _2bz * q1) * (_2bx * (0.5f - q3q3 - q4q4) + _2bz * (q2q4 - q1q3) - mx) + (_2bx * q2 + _2bz * q4) * (_2bx * (q2q3 - q1q4) + _2bz * (q1q2 + q3q4) - my) + (_2bx * q1 - _4bz * q3) * (_2bx * (q1q3 + q2q4) + _2bz * (0.5f - q2q2 - q3q3) - mz);
-		s3 = _2q2 * (2.0f * q2q4 - _2q1q3 - ax) + _2q3 * (2.0f * q1q2 + _2q3q4 - ay) + (-_4bx * q4 + _2bz * q2) * (_2bx * (0.5f - q3q3 - q4q4) + _2bz * (q2q4 - q1q3) - mx) + (-_2bx * q1 + _2bz * q3) * (_2bx * (q2q3 - q1q4) + _2bz * (q1q2 + q3q4) - my) + _2bx * q2 * (_2bx * (q1q3 + q2q4) + _2bz * (0.5f - q2q2 - q3q3) - mz);
+		//s0 = -_2q3 * (2.0f * q2q4 - _2q1q3 - ax) + _2q2 * (2.0f * q1q2 + _2q3q4 - ay) - _2bz * q3 * (_2bx * (0.5f - q3q3 - q4q4) + _2bz * (q2q4 - q1q3) - mx) + (-_2bx * q4 + _2bz * q2) * (_2bx * (q2q3 - q1q4) + _2bz * (q1q2 + q3q4) - my) + _2bx * q3 * (_2bx * (q1q3 + q2q4) + _2bz * (0.5f - q2q2 - q3q3) - mz);
+    s0 = -_2q3 * (2.0f * q2q4 - _2q1q3 - ax) + _2q2 * (2.0f * q1q2 + _2q3q4 - ay) - _4bz * q3 * (_4bx * (0.5f - q3q3 - q4q4) + _4bz * (q2q4 - q1q3) - mx) + (-_4bx * q4 + _4bz * q2) * (_4bx * (q2q3 - q1q4) + _4bz * (q1q2 + q3q4) - my) + _4bx * q3 * (_4bx * (q1q3 + q2q4) + _4bz * (0.5f - q2q2 - q3q3) - mz);
+		//s1 = _2q4 * (2.0f * q2q4 - _2q1q3 - ax) + _2q1 * (2.0f * q1q2 + _2q3q4 - ay) - 4.0f * q2 * (1.0f - 2.0f * q2q2 - 2.0f * q3q3 - az) + _2bz * q4 * (_2bx * (0.5f - q3q3 - q4q4) + _2bz * (q2q4 - q1q3) - mx) + (_2bx * q3 + _2bz * q1) * (_2bx * (q2q3 - q1q4) + _2bz * (q1q2 + q3q4) - my) + (_2bx * q4 - _4bz * q2) * (_2bx * (q1q3 + q2q4) + _2bz * (0.5f - q2q2 - q3q3) - mz);
+		s1 = _2q4 * (2.0f * q2q4 - _2q1q3 - ax) + _2q1 * (2.0f * q1q2 + _2q3q4 - ay) - 4.0f * q2 * (1.0f - 2.0f * q2q2 - 2.0f * q3q3 - az) + _4bz * q4 * (_4bx * (0.5f - q3q3 - q4q4) + _4bz * (q2q4 - q1q3) - mx) + (_4bx * q3 + _4bz * q1) * (_4bx * (q2q3 - q1q4) + _4bz * (q1q2 + q3q4) - my) + (_4bx * q4 - _8bz * q2) * (_4bx * (q1q3 + q2q4) + _4bz * (0.5f - q2q2 - q3q3) - mz);
+		//s2 = -_2q1 * (2.0f * q2q4 - _2q1q3 - ax) + _2q4 * (2.0f * q1q2 + _2q3q4 - ay) - 4.0f * q3 * (1.0f - 2.0f * q2q2 - 2.0f * q3q3 - az) + (-_4bx * q3 - _2bz * q1) * (_2bx * (0.5f - q3q3 - q4q4) + _2bz * (q2q4 - q1q3) - mx) + (_2bx * q2 + _2bz * q4) * (_2bx * (q2q3 - q1q4) + _2bz * (q1q2 + q3q4) - my) + (_2bx * q1 - _4bz * q3) * (_2bx * (q1q3 + q2q4) + _2bz * (0.5f - q2q2 - q3q3) - mz);
+		s2 = -_2q1 * (2.0f * q2q4 - _2q1q3 - ax) + _2q4 * (2.0f * q1q2 + _2q3q4 - ay) - 4.0f * q3 * (1.0f - 2.0f * q2q2 - 2.0f * q3q3 - az) + (-_8bx * q3 - _4bz * q1) * (_4bx * (0.5f - q3q3 - q4q4) + _4bz * (q2q4 - q1q3) - mx) + (_4bx * q2 + _4bz * q4) * (_4bx * (q2q3 - q1q4) + _4bz * (q1q2 + q3q4) - my) + (_4bx * q1 - _8bz * q3) * (_4bx * (q1q3 + q2q4) + _4bz * (0.5f - q2q2 - q3q3) - mz);
+		//s3 = _2q2 * (2.0f * q2q4 - _2q1q3 - ax) + _2q3 * (2.0f * q1q2 + _2q3q4 - ay) + (-_4bx * q4 + _2bz * q2) * (_2bx * (0.5f - q3q3 - q4q4) + _2bz * (q2q4 - q1q3) - mx) + (-_2bx * q1 + _2bz * q3) * (_2bx * (q2q3 - q1q4) + _2bz * (q1q2 + q3q4) - my) + _2bx * q2 * (_2bx * (q1q3 + q2q4) + _2bz * (0.5f - q2q2 - q3q3) - mz);
+		s3 = _2q2 * (2.0f * q2q4 - _2q1q3 - ax) + _2q3 * (2.0f * q1q2 + _2q3q4 - ay) + (-_8bx * q4 + _4bz * q2) * (_4bx * (0.5f - q3q3 - q4q4) + _4bz * (q2q4 - q1q3) - mx) + (-_4bx * q1 + _4bz * q3) * (_4bx * (q2q3 - q1q4) + _4bz * (q1q2 + q3q4) - my) + _4bx * q2 * (_4bx * (q1q3 + q2q4) + _4bz * (0.5f - q2q2 - q3q3) - mz);
+    
 		recipNorm = AccurateInvSqrt(s0 * s0 + s1 * s1 + s2 * s2 + s3 * s3); // normalise step magnitude
 		s0 *= recipNorm;
 		s1 *= recipNorm;
